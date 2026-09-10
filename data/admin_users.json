@@ -1,0 +1,12 @@
+{
+  "staff": {
+    "username": "staff",
+    "salt": "e8ef0521498b61d07c8c1afa70a9813f",
+    "password_hash": "32d4dbda8869178a8934eb8207cb815b38bb81ab3072e5aae709d96b92b1830d"
+  },
+  "super_admin": {
+    "username": "admin",
+    "salt": "128465d7616ea6d31800897e7d2bf032",
+    "password_hash": "5909158286b7f12c7283cbbd9aaca4a8d40b14e4d4c69cac0448320d8018ba7d"
+  }
+}
