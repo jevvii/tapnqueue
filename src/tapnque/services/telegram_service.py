@@ -20,6 +20,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from tapnque.config import (
     DEFAULT_TELEGRAM_ENABLED,
     DEFAULT_TELEGRAM_MOCK_MODE,
+    DEFAULT_TELEGRAM_TEMPLATE_CALLED,
+    DEFAULT_TELEGRAM_TEMPLATE_COMPLETED,
+    DEFAULT_TELEGRAM_TEMPLATE_CREATED,
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_BOT_USERNAME,
 )
@@ -658,11 +661,14 @@ class _TelegramLinkListener:
         if ticket_number is None:
             # Bare /start with no QR payload: guide brand-new Telegram users.
             welcome = (
-                "👋 *Welcome to TapNQue alerts!*\n\n"
-                "To link a queue ticket to this chat, scan the QR code shown on the "
-                "kiosk confirmation screen and tap START again — your ticket will "
-                "connect itself automatically.\n\n"
-                "No ticket yet? Get one at the TapNQue kiosk first."
+                "👋 *Welcome to TapNQue Queue Alerts!*\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                "TapNQue delivers real-time campus queue alerts straight to your Telegram chat.\n\n"
+                "📲 *How to link your ticket:*\n"
+                "1️⃣ Take a queue ticket at any TapNQue Kiosk.\n"
+                "2️⃣ Scan the *Telegram QR Code* on screen or on your printed slip.\n"
+                "3️⃣ Tap *START* in Telegram — your ticket connects instantly!\n\n"
+                "_TapNQue • OLFU Student Services_"
             )
             send_via_telegram_api(chat_id, welcome, token)
             logger.info("Sent TapNQue welcome guide to chat %s", chat_id)
@@ -672,8 +678,12 @@ class _TelegramLinkListener:
         if not ticket:
             send_via_telegram_api(
                 chat_id,
-                f"⚠️ Ticket *#{ticket_number:04d}* was not found. It may have expired — "
-                f"please take a new ticket at the TapNQue kiosk and scan its QR code.",
+                f"⚠️ *Ticket Not Found or Expired*\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"Ticket *#{ticket_number:04d}* could not be found or has already been concluded.\n\n"
+                f"ℹ️ *Need assistance?*\n"
+                f"Please register for a new ticket at the TapNQue kiosk and scan the on-screen QR code.\n\n"
+                f"_TapNQue • OLFU Student Services_",
                 token,
             )
             return
@@ -731,10 +741,7 @@ def send_ticket_created_telegram(ticket: Dict[str, Any], queue_position: int) ->
 
     db = get_database()
     settings = db.get_telegram_settings()
-    template = settings.get(
-        "telegram_template_created",
-        "🎟️ *TapNQue Ticket Confirmation*\n\nHello *{name}*!\nTicket Number: *#{ticket}*\nPosition: *{position}*\nPurpose: *{purpose}*\n\nPlease watch the lobby monitor screen for your number to be called!",
-    )
+    template = settings.get("telegram_template_created", DEFAULT_TELEGRAM_TEMPLATE_CREATED)
 
     context = {
         "name": ticket.get("name", "Student"),
@@ -757,10 +764,7 @@ def send_ticket_called_telegram(ticket: Dict[str, Any], counter_id: int) -> bool
 
     db = get_database()
     settings = db.get_telegram_settings()
-    template = settings.get(
-        "telegram_template_called",
-        "🔔 *NOW SERVING ALERT*\n\nTicket *#{ticket}* (*{name}*), please proceed to *Counter {counter}* immediately!\n\n_TapNQue Student Queue Management_",
-    )
+    template = settings.get("telegram_template_called", DEFAULT_TELEGRAM_TEMPLATE_CALLED)
 
     context = {
         "name": ticket.get("name", "Student"),
@@ -783,10 +787,7 @@ def send_ticket_completed_telegram(ticket: Dict[str, Any]) -> bool:
 
     db = get_database()
     settings = db.get_telegram_settings()
-    template = settings.get(
-        "telegram_template_completed",
-        "✅ *Service Completed*\n\nTicket *#{ticket}* has now been marked as completed. Thank you for visiting TapNQue!",
-    )
+    template = settings.get("telegram_template_completed", DEFAULT_TELEGRAM_TEMPLATE_COMPLETED)
 
     context = {
         "name": ticket.get("name", "Student"),

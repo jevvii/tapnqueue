@@ -19,6 +19,9 @@ from tapnque.config import (
     DEFAULT_SMS_SENDER_NAME,
     DEFAULT_TELEGRAM_ENABLED,
     DEFAULT_TELEGRAM_MOCK_MODE,
+    DEFAULT_TELEGRAM_TEMPLATE_CALLED,
+    DEFAULT_TELEGRAM_TEMPLATE_COMPLETED,
+    DEFAULT_TELEGRAM_TEMPLATE_CREATED,
     LEGACY_JSON_PATH,
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_BOT_USERNAME,
@@ -172,24 +175,33 @@ class DatabaseManager:
                 ("telegram_mock_mode", "1" if DEFAULT_TELEGRAM_MOCK_MODE else "0"),
                 ("telegram_bot_token", TELEGRAM_BOT_TOKEN),
                 ("telegram_bot_username", TELEGRAM_BOT_USERNAME),
-                (
-                    "telegram_template_created",
-                    "🎟️ *TapNQue Ticket Confirmation*\n\nHello *{name}*!\nTicket Number: *#{ticket}*\nPosition: *{position}*\nPurpose: *{purpose}*\n\nPlease watch the lobby monitor for your number to be called!",
-                ),
-                (
-                    "telegram_template_called",
-                    "🔔 *NOW SERVING ALERT*\n\nTicket *#{ticket}* (*{name}*), please proceed to *Counter {counter}* immediately!\n\n_TapNQue Student Queue Management_",
-                ),
-                (
-                    "telegram_template_completed",
-                    "✅ *Service Completed*\n\nTicket *#{ticket}* has been marked as completed. Thank you for visiting TapNQue!",
-                ),
+                ("telegram_template_created", DEFAULT_TELEGRAM_TEMPLATE_CREATED),
+                ("telegram_template_called", DEFAULT_TELEGRAM_TEMPLATE_CALLED),
+                ("telegram_template_completed", DEFAULT_TELEGRAM_TEMPLATE_COMPLETED),
             ]
             for key, val in default_settings:
                 conn.execute(
                     "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
                     (key, val),
                 )
+
+            # Auto-upgrade legacy default templates to the modern high-impact format
+            legacy_called = "🔔 *NOW SERVING ALERT*\n\nTicket *#{ticket}* (*{name}*), please proceed to *Counter {counter}* immediately!\n\n_TapNQue Student Queue Management_"
+            legacy_created = "🎟️ *TapNQue Ticket Confirmation*\n\nHello *{name}*!\nTicket Number: *#{ticket}*\nPosition: *{position}*\nPurpose: *{purpose}*\n\nPlease watch the lobby monitor for your number to be called!"
+            legacy_completed = "✅ *Service Completed*\n\nTicket *#{ticket}* has been marked as completed. Thank you for visiting TapNQue!"
+
+            conn.execute(
+                "UPDATE settings SET value = ? WHERE key = 'telegram_template_called' AND (value = ? OR value LIKE '%Student Queue Management%')",
+                (DEFAULT_TELEGRAM_TEMPLATE_CALLED, legacy_called),
+            )
+            conn.execute(
+                "UPDATE settings SET value = ? WHERE key = 'telegram_template_created' AND (value = ? OR value LIKE '%lobby monitor for your number%')",
+                (DEFAULT_TELEGRAM_TEMPLATE_CREATED, legacy_created),
+            )
+            conn.execute(
+                "UPDATE settings SET value = ? WHERE key = 'telegram_template_completed' AND (value = ? OR value LIKE '%marked as completed. Thank you for visiting TapNQue!%')",
+                (DEFAULT_TELEGRAM_TEMPLATE_COMPLETED, legacy_completed),
+            )
 
             if conn.execute("SELECT COUNT(*) FROM statistics").fetchone()[0] == 0:
                 conn.executemany(
@@ -786,15 +798,15 @@ class DatabaseManager:
                 "telegram_bot_username": kv.get("telegram_bot_username", TELEGRAM_BOT_USERNAME),
                 "telegram_template_created": kv.get(
                     "telegram_template_created",
-                    "🎟️ *TapNQue Ticket Confirmation*\n\nHello *{name}*!\nTicket Number: *#{ticket}*\nPosition: *{position}*\nPurpose: *{purpose}*\n\nPlease watch the lobby monitor for your number to be called!",
+                    DEFAULT_TELEGRAM_TEMPLATE_CREATED,
                 ),
                 "telegram_template_called": kv.get(
                     "telegram_template_called",
-                    "🔔 *NOW SERVING ALERT*\n\nTicket *#{ticket}* (*{name}*), please proceed to *Counter {counter}* immediately!\n\n_TapNQue Student Queue Management_",
+                    DEFAULT_TELEGRAM_TEMPLATE_CALLED,
                 ),
                 "telegram_template_completed": kv.get(
                     "telegram_template_completed",
-                    "✅ *Service Completed*\n\nTicket *#{ticket}* has been marked as completed. Thank you for visiting TapNQue!",
+                    DEFAULT_TELEGRAM_TEMPLATE_COMPLETED,
                 ),
             }
 

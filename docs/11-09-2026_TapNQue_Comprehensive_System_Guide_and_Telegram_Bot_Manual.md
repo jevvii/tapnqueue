@@ -198,13 +198,18 @@ This section provides an end-to-end, hands-on live testing walkthrough using the
    - The device opens Telegram directly to the bot with the pre-loaded ticket payload.
    - Instantly, the Telegram app receives the live confirmation push alert:
      ```text
-     🎫 *TICKET CONFIRMED*
+     🎟️ *TICKET CONFIRMED: #0001*
+     ━━━━━━━━━━━━━━━━━━━━
+     📍 *Current Line Position: #1*
 
-     Hello *Maria Santos*! Your ticket *#0001* has been registered.
-     • Queue Position: *1*
-     • Purpose: *Registrar - Transcript*
+     👤 *Student:* Maria Santos
+     📋 *Service:* Registrar - Transcript
+     🎫 *Ticket Number:* #0001
 
-     _TapNQue Student Queue Management_
+     💡 *What to do next:*
+     Relax and keep this chat open. Your phone will buzz with an alert the moment your counter is assigned!
+
+     _TapNQue • OLFU Student Services_
      ```
 6. Observe the Kiosk terminal console: the daemon confirms an HTTP 200 OK delivery response from `https://api.telegram.org/bot<token>/sendMessage`.
 
@@ -218,25 +223,35 @@ This section provides an end-to-end, hands-on live testing walkthrough using the
 3. Click **CALL NEXT** (Trigger 2):
    - Active Serving Card illuminates with Ticket `#0001` assigned to Counter 1.
    - Public TV lobby monitor pulses visual call flash animations and audio chimes.
-   - Within 500 milliseconds, the student's Telegram app vibrates with the live call alert:
+   - Within 500 milliseconds, the student's Telegram app vibrates with the live call alert displaying Counter 1 prominently on line 1:
      ```text
-     🔔 *NOW SERVING ALERT*
+     🚨 *PROCEED TO COUNTER 1 NOW*
+     ━━━━━━━━━━━━━━━━━━━━
+     📢 *NOW SERVING TICKET #0001*
 
-     Ticket *#0001* (*Maria Santos*), please proceed to *Counter 1* immediately!
+     👤 *Student:* Maria Santos
+     📋 *Service:* Registrar - Transcript
+     📍 *Assigned Station:* Counter 1
 
-     _TapNQue Student Queue Management_
+     ⚡ *Action Required:*
+     Please report directly to *Counter 1* with your requirements to be accommodated.
+
+     _TapNQue • OLFU Student Services_
      ```
 4. *(Optional Recall Verification)*: Click the **RECALL** button. Confirm that the lobby monitor re-pulses and an updated live call alert arrives on the student's Telegram client.
 5. Click **MARK DONE** (Trigger 3):
    - Transaction is finalized, wait duration is logged, and the ticket moves to history.
    - The student's Telegram client receives the final live completion notification:
      ```text
-     ✅ *SERVICE COMPLETED*
+     ✅ *SERVICE COMPLETED: #0001*
+     ━━━━━━━━━━━━━━━━━━━━
+     👤 *Student:* Maria Santos
+     📋 *Service:* Registrar - Transcript
+     🎫 *Ticket Number:* #0001
 
-     Ticket *#0001* has been completed at *Counter 1*.
-     Thank you for visiting TapNQue!
+     ✨ Your transaction has been marked completed by the counter officer. Thank you for visiting TapNQue!
 
-     _TapNQue Student Queue Management_
+     _TapNQue • OLFU Student Services_
      ```
 
 ### Phase 4: Verify Live Delivery Records & SQLite Persistence

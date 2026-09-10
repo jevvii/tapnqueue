@@ -682,19 +682,33 @@ class SuperAdmin(QWidget):
 
         tg_t1_lbl = QLabel("1. Ticket Created Alert (Dispatched on Kiosk Registration):")
         tg_t1_lbl.setStyleSheet("font-weight: 600; font-size: 13px;")
-        self.tg_created_tmpl_input = QLineEdit()
+        self.tg_created_tmpl_input = QTextEdit()
+        self.tg_created_tmpl_input.setMinimumHeight(95)
+        self.tg_created_tmpl_input.setMaximumHeight(140)
+        self.tg_created_tmpl_input.setAcceptRichText(False)
+        tmpl_font = self.tg_created_tmpl_input.font()
+        tmpl_font.setPointSize(11)
+        self.tg_created_tmpl_input.setFont(tmpl_font)
         tg_tmpl_col.addWidget(tg_t1_lbl)
         tg_tmpl_col.addWidget(self.tg_created_tmpl_input)
 
         tg_t2_lbl = QLabel("2. Ticket Called Alert (Dispatched when Service Counter calls/recalls ticket):")
         tg_t2_lbl.setStyleSheet("font-weight: 600; font-size: 13px;")
-        self.tg_called_tmpl_input = QLineEdit()
+        self.tg_called_tmpl_input = QTextEdit()
+        self.tg_called_tmpl_input.setMinimumHeight(95)
+        self.tg_called_tmpl_input.setMaximumHeight(140)
+        self.tg_called_tmpl_input.setAcceptRichText(False)
+        self.tg_called_tmpl_input.setFont(tmpl_font)
         tg_tmpl_col.addWidget(tg_t2_lbl)
         tg_tmpl_col.addWidget(self.tg_called_tmpl_input)
 
         tg_t3_lbl = QLabel("3. Ticket Completed Alert (Dispatched when Service Counter marks ticket Done):")
         tg_t3_lbl.setStyleSheet("font-weight: 600; font-size: 13px;")
-        self.tg_completed_tmpl_input = QLineEdit()
+        self.tg_completed_tmpl_input = QTextEdit()
+        self.tg_completed_tmpl_input.setMinimumHeight(95)
+        self.tg_completed_tmpl_input.setMaximumHeight(140)
+        self.tg_completed_tmpl_input.setAcceptRichText(False)
+        self.tg_completed_tmpl_input.setFont(tmpl_font)
         tg_tmpl_col.addWidget(tg_t3_lbl)
         tg_tmpl_col.addWidget(self.tg_completed_tmpl_input)
 
@@ -804,9 +818,9 @@ class SuperAdmin(QWidget):
 
         self.tg_token_input.setText(tg.get("telegram_bot_token", ""))
         self.tg_username_input.setText(username)
-        self.tg_created_tmpl_input.setText(tg.get("telegram_template_created", ""))
-        self.tg_called_tmpl_input.setText(tg.get("telegram_template_called", ""))
-        self.tg_completed_tmpl_input.setText(tg.get("telegram_template_completed", ""))
+        self.tg_created_tmpl_input.setPlainText(tg.get("telegram_template_created", ""))
+        self.tg_called_tmpl_input.setPlainText(tg.get("telegram_template_called", ""))
+        self.tg_completed_tmpl_input.setPlainText(tg.get("telegram_template_completed", ""))
 
         self._update_telegram_qr_preview()
 
@@ -863,9 +877,9 @@ class SuperAdmin(QWidget):
     def _save_telegram_settings(self):
         token = self.tg_token_input.text().strip()
         username = self.tg_username_input.text().strip().lstrip("@")
-        created_tmpl = self.tg_created_tmpl_input.text().strip()
-        called_tmpl = self.tg_called_tmpl_input.text().strip()
-        completed_tmpl = self.tg_completed_tmpl_input.text().strip()
+        created_tmpl = self.tg_created_tmpl_input.toPlainText().strip()
+        called_tmpl = self.tg_called_tmpl_input.toPlainText().strip()
+        completed_tmpl = self.tg_completed_tmpl_input.toPlainText().strip()
 
         tg = self.db.get_telegram_settings()
         wants_live = tg.get("telegram_enabled", True) and not tg.get("telegram_mock_mode", True)
@@ -961,7 +975,15 @@ class SuperAdmin(QWidget):
             return
 
         chat_id = chat_id.strip()
-        test_msg = "🔔 *TapNQue Test Alert*\n\nThis is a test notification verifying your Telegram Bot integration."
+        test_msg = (
+            "🔔 *TapNQue Test Notification*\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "📍 *Target Location:* Counter 1\n"
+            "✅ *System Status:* Bot Delivery Operational\n"
+            "⚡ *Gateway:* Live Telegram Bot API\n\n"
+            "This is a test alert verifying push notifications, markdown rendering, and instant delivery.\n\n"
+            "_TapNQue System Administrator_"
+        )
 
         if is_mock or not bot_token:
             simulate_mock_telegram(chat_id, test_msg, "test", 9999)
