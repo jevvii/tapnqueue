@@ -1,11 +1,11 @@
 # TapNQue Student Queue Management System
-## Comprehensive System Architecture, Administrative Authentication Guide, and Telegram QR Bot API Operations Manual
+## Comprehensive System Architecture, Administrative Authentication Guide, Telegram QR Bot API Operations Manual, and Hands-On Simulation Walkthrough
 
 **Document ID:** TNQ-DOC-MAN-2026-03-TELEGRAM  
 **Release Version:** Version 2.2.0-PROD (Telegram QR Bot Integrated)  
 **Target Audience:** Capstone Defense Panelists, Campus Administrators, Service Staff, Technical Support  
-**Technology Stack:** Python 3.10+, PySide6 (Qt6 GUI), SQLite3 (WAL Mode), Telegram Bot API, `qrcode` & `pillow`  
-**Outbound Protocol:** Official Telegram Bot API (`https://api.telegram.org`) + Deep-Linking QR Codes + Safe Capstone Mock Mode  
+**Technology Stack:** Python 3.10+, PySide6 (Qt6 GUI), SQLite3 (WAL Mode), Telegram Bot API, qrcode & pillow  
+**Outbound Protocol:** Official Telegram Bot API (`https://api.telegram.org`) + Deep-Linking QR Codes + Safe Mock Mode  
 **Publication & Effective Date:** September 11, 2026 (11-09-2026)  
 **Standard Word Version:** [`11-09-2026_TapNQue_Comprehensive_System_Guide_and_Telegram_Bot_Manual.docx`](11-09-2026_TapNQue_Comprehensive_System_Guide_and_Telegram_Bot_Manual.docx)
 
@@ -13,9 +13,9 @@
 
 ## 1. Executive Summary & Architectural Overview
 
-The Telegram version of TapNQue represents an enterprise-grade evolution in student queue notifications. Developed in the dedicated **Project6.1** worktree (branch: `telegram-version`), this implementation replaces recurring SMS gateway expenses with the official **Telegram Bot API (`api.telegram.org`)** combined with **client-side QR code deep-linking**.
+The Telegram version of TapNQue represents an enterprise-grade evolution in student queue notifications. Developed in the dedicated Project6.1 worktree (branch: `telegram-version`), this implementation replaces recurring SMS gateway expenses with the official Telegram Bot API (`api.telegram.org`) combined with client-side QR code deep-linking.
 
-Conventional commercial SMS gateways charge between ₱0.40 and ₱0.50 per segment and are subject to carrier congestion, character truncation (160 GSM characters), and SIM registration compliance hurdles. In contrast, the TapNQue Telegram QR Bot Subsystem operates at **100% zero recurring expense (₱0.00/month)**, supports up to 4,096 characters per message, provides rich Markdown text styling, and allows frictionless student onboarding via instant smartphone camera QR scanning.
+Conventional commercial SMS gateways charge between ₱0.40 and ₱0.50 per segment and are subject to carrier congestion, character truncation (160 GSM chars), and SIM registration compliance hurdles. In contrast, the TapNQue Telegram QR Bot Subsystem operates at 100% zero recurring expense (₱0.00/month), supports up to 4,096 characters per message, provides rich Markdown text styling, and allows frictionless student onboarding via instant smartphone camera QR scanning.
 
 ### 1.1 Strategic Vectors: Traditional SMS vs. TapNQue Telegram Bot
 
@@ -25,15 +25,15 @@ Conventional commercial SMS gateways charge between ₱0.40 and ₱0.50 per segm
 | **Account Expiry / Minimums** | Prepaid credits expire after 1–2 years | **Zero expiration; No billing account required** |
 | **Payload Capacity** | 160 GSM-7 / 70 Unicode chars per segment | **Up to 4,096 UTF-8 characters per message** |
 | **Typography & Formatting** | Plain unformatted text only | **Rich Markdown (bold, italics, hyperlinks, icons)** |
-| **User Onboarding Experience** | Manual keyboard typing of phone number | **Instant camera QR code scan from screen** |
+| **User Onboarding Experience**| Manual keyboard typing of phone number | **Instant camera QR code scan from screen** |
 | **Delivery Latency** | 3 to 45 seconds (carrier-dependent) | **Sub-second cloud socket delivery push** |
 | **Network Infrastructure** | Requires cellular telco base station signal | **Operates over standard campus Wi-Fi / LTE** |
 
 ### 1.2 Modular Station Architecture
-- **Student Touchscreen Kiosk (`src/tapnque/ui/kiosk.py` / `run_kiosk.py`):** Student intake terminal collecting student identification, optional Telegram handle or Chat ID, and displaying an on-screen high-resolution Telegram bot deep-link QR code.
-- **Staff Admin Service Desk (`src/tapnque/ui/staff.py` / `run_staff.py`):** Counter workstation with dynamic counter selection, automated priority queueing, and multi-event Telegram dispatches (Call Next, Recall, Mark Done).
-- **Super Admin Executive Console (`src/tapnque/ui/super_admin.py` / `run_admin.py`):** Operational dashboard with real-time queue health gauges, Telegram Bot credentials management (`@BotFather` token & username), live QR preview generator, custom markdown template editors, and mock Telegram log viewer.
-- **Public TV / Lobby Monitor (`src/tapnque/ui/monitor.py` / `run_monitor.py`):** Fullscreen wall display featuring animated calling announcements, serving counter status cards, and upcoming waiting tickers.
+- **Student Touchscreen Kiosk (`src/tapnque/ui/kiosk.py`):** Student intake terminal collecting student identification, optional Telegram handle or Chat ID, and displaying an on-screen high-resolution Telegram bot deep-link QR code.
+- **Staff Admin Service Desk (`src/tapnque/ui/staff.py`):** Counter workstation with dynamic counter selection, automated priority queueing, and multi-event Telegram dispatches (Call Next, Recall, Mark Done).
+- **Super Admin Executive Console (`src/tapnque/ui/super_admin.py`):** Operational dashboard with real-time queue health gauges, Telegram Bot credentials management (@BotFather token & username), live QR preview generator, custom markdown template editors, and mock Telegram log viewer.
+- **Public TV / Lobby Monitor (`src/tapnque/ui/monitor.py`):** Fullscreen wall display featuring animated calling announcements, serving counter status cards, and upcoming waiting tickers.
 - **Core Database Engine (`src/tapnque/core/database.py`):** SQLite manager operating in Write-Ahead Logging (WAL) mode with dedicated Telegram status columns and configuration persistence.
 - **Telegram Bot Notification Engine (`src/tapnque/services/telegram_service.py`):** High-performance daemon queue worker with Telegram Bot API integration, QR generator, template formatter, and safe mock mode.
 
@@ -101,10 +101,9 @@ The TapNQue Telegram Bot Subsystem leverages the official Telegram Bot HTTP API 
 
 ### 4.1 Deep-Linking QR Code Mechanics
 Rather than forcing a student to manually search for the bot or look up their internal numeric Telegram Chat ID, TapNQue formats deep-linking URLs as follows:
-```text
-https://t.me/<bot_username>?start=ticket_<ticket_number>
-Example: https://t.me/TapNQueBot?start=ticket_0042
-```
+`https://t.me/<bot_username>?start=ticket_<ticket_number>`  
+*Example:* `https://t.me/TapNQueBot?start=ticket_0042`
+
 When a student scans the on-screen QR code generated by `qrcode` and `pillow` on the Kiosk confirmation dialog, the Telegram client automatically launches and opens a conversation with the bot with the ticket number pre-loaded in the `/start` payload.
 
 ### 4.2 Official Telegram Bot API Specifications
@@ -123,32 +122,135 @@ When a student scans the on-screen QR code generated by `qrcode` and `pillow` on
 - **Response Handling:** Parses JSON response status. Success returns code 200 with message ID; errors are captured in database logs without interrupting user workflow.
 
 ### 4.3 Step-by-Step BotFather Setup Guide
-1. **Step 1:** Open Telegram on any device and search for `@BotFather` (official verified bot with blue checkmark).
-2. **Step 2:** Send the command: `/newbot`
-3. **Step 3:** Enter a display name for the bot (e.g. `TapNQue Queue Alert Bot`).
-4. **Step 4:** Enter a unique bot username ending in `bot` (e.g. `OlfuTapNQueBot` or `TapNQueQueueBot`).
-5. **Step 5:** `@BotFather` will return your HTTP API Token:
-   ```text
-   1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ12345
-   ```
-6. **Step 6:** Open Super Admin > Settings > Telegram QR Bot System Configuration.
-7. **Step 7:** Paste the token into **Telegram Bot Token** and the username into **Telegram Bot Username**.
-8. **Step 8:** Click **SWITCH TO LIVE BOT** and save configuration.
+1. **Access BotFather:** Open Telegram on any device and search for `@BotFather` (official verified bot with blue checkmark).
+2. **Initiate Creation:** Send the command: `/newbot`
+3. **Configure Display Name:** Enter a display name for the bot (e.g. `TapNQue Queue Alert Bot`).
+4. **Configure Bot Handle:** Enter a unique bot username ending in 'bot' (e.g. `OlfuTapNQueBot` or `TapNQueQueueBot`).
+5. **Obtain API Token:** `@BotFather` will return your HTTP API Token: `1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ12345`
+6. **Access Super Admin:** Open Super Admin > **Settings** > **Telegram QR Bot System Configuration**.
+7. **Save Credentials:** Paste the token into **Telegram Bot Token** and the username into **Telegram Bot Username**.
+8. **Activate Live Mode:** Click **SWITCH TO LIVE BOT** and save configuration.
 
 ### 4.4 Notification Lifecycle Triggers
 
 | Trigger Event | Dispatched When | Target Recipient | Default Message Content |
 | :--- | :--- | :--- | :--- |
-| **1. Ticket Created** | Student submits check-in form at Kiosk | Student Chat ID / @username | 🎟️ *TapNQue Ticket Confirmation*\n\nHello *{name}*! Ticket: *#{ticket}* \| Pos: *{position}*\nReason: *{purpose}*\n\nPlease watch the lobby monitor screen! |
-| **2. Ticket Called / Recalled** | Staff clerk clicks Call Next or Recall | Active Ticket Student | 🔔 *NOW SERVING ALERT*\n\nTicket *#{ticket}* (*{name}*), please proceed to *Counter {counter}* immediately!\n\n_TapNQue Student Queue Management_ |
-| **3. Ticket Completed** | Staff clerk marks transaction as Done | Served Student | ✅ *Service Completed*\n\nTicket *#{ticket}* has now been marked as completed. Thank you for visiting TapNQue! |
+| **1. Ticket Created** | Student submits check-in form at Kiosk | Student Chat ID / @username | 🎟️ *TapNQue Ticket Confirmation*
+
+Hello *{name}*! Ticket: *#{ticket}* \| Pos: *{position}*
+Reason: *{purpose}*
+
+Please watch the lobby monitor screen! |
+| **2. Ticket Called / Recalled** | Staff clerk clicks Call Next or Recall | Active Ticket Student | 🔔 *NOW SERVING ALERT*
+
+Ticket *#{ticket}* (*{name}*), please proceed to *Counter {counter}* immediately!
+
+_TapNQue Student Queue Management_ |
+| **3. Ticket Completed** | Staff clerk marks transaction as Done | Served Student | ✅ *Service Completed*
+
+Ticket *#{ticket}* has now been marked as completed. Thank you for visiting TapNQue! |
 
 ### 4.5 Asynchronous Daemon Queue Worker
 To guarantee zero UI freezing during network dispatches, outbound Telegram notifications are processed by `_TelegramQueueManager`. Tasks are enqueued asynchronously in a thread-safe Queue and executed by a dedicated background daemon thread.
 
 ---
 
-## 5. Safe Capstone Mock Simulation Mode
+## 5. Step-by-Step Hands-On Telegram Bot Simulation Walkthrough
+
+To allow thesis panelists, faculty evaluators, and system administrators to verify the full Telegram QR Bot notification lifecycle without requiring a live public bot token or internet connection, execute the following structured hands-on walkthrough:
+
+### Phase 1: Verify Super Admin Settings & On-Demand Test Dispatch
+1. Launch the Super Admin Console:
+   ```bash
+   python run_admin.py
+   ```
+   Log in with credentials: Username `admin`, Password `admin123`.
+2. Navigate to the **Settings** tab and scroll to the **Telegram QR Bot Subsystem** group box.
+3. Confirm that the mode status badge indicates:
+   `● MOCK MODE ACTIVE (Safe Capstone Simulation — Local Logging Only, No Telegram Dispatch)`
+4. Confirm that the **Bot Username** field contains a handle (e.g. `TapNQueQueueBot`) and note the real-time QR code preview rendered adjacent to the credentials.
+5. Click **TEST TELEGRAM DISPATCH**. In the modal, enter `@maria_student` (or numeric chat ID `123456789`), and click **SEND TEST MESSAGE**.
+6. Confirm the success notification appears. Click **VIEW MOCK TELEGRAM LOGS** to inspect the `TelegramLogDialog` audit table containing the recorded test entry with timestamp, recipient, and formatted markdown body.
+
+### Phase 2: Generate Ticket on Student Kiosk with QR Deep-Link (Trigger 1: CREATED)
+1. In a separate terminal, launch the Student Kiosk terminal:
+   ```bash
+   python run_kiosk.py
+   ```
+2. On the touchscreen check-in form, enter the following demonstration student profile:
+   - **Student Full Name:** `Maria Santos`
+   - **Student Identification Number:** `2023-20055`
+   - **Email Address:** `maria@olfu.edu.ph`
+   - **Mobile Number:** `0918 123 4567`
+   - **Telegram Username:** `@maria_student`
+   - **Visitor Classification:** `Student`
+   - **Purpose of Visit:** `Registrar - Transcript`
+3. Click the prominent green **GET TICKET** button.
+4. The high-resolution `TicketCreatedDialog` modal appears displaying:
+   - Sequential Ticket Number `#0001`.
+   - Dynamic QR code encoding `https://t.me/<bot_username>?start=ticket_0001`.
+   - Instructional banner: *"Scan QR code with smartphone camera or Telegram app to receive queue updates!"*.
+   - Status confirmation pill: `Telegram notification dispatched.`
+5. Switch to the Kiosk terminal console to observe the asynchronous daemon log output:
+   ```text
+   ✈️ [TELEGRAM BOT SIMULATION] To: @maria_student | Event: CREATED | Ticket: #0001
+      "🎫 *TICKET CONFIRMED*
+
+   Hello *Maria Santos*! Your ticket *#0001* has been registered.
+   • Queue Position: *1*
+   • Purpose: *Registrar - Transcript*
+
+   _TapNQue Student Queue Management_"
+   ```
+
+### Phase 3: Service Ticket at Staff Service Desk (Trigger 2: CALLED & Trigger 3: COMPLETED)
+1. In a third terminal window, launch the Staff Admin interface:
+   ```bash
+   python run_staff.py
+   ```
+   Log in with credentials: Username `staff`, Password `staff123`.
+2. Select **Counter 1**. Observe Ticket `#0001` (`Maria Santos`) positioned at the head of the priority queue table.
+3. Click **CALL NEXT** (Trigger 2):
+   - The Active Serving Card illuminates with Ticket `#0001` assigned to Counter 1.
+   - The public lobby display board triggers visual flash highlights and acoustic attention cues.
+   - The terminal console outputs the outbound Telegram dispatch:
+     ```text
+     ✈️ [TELEGRAM BOT SIMULATION] To: @maria_student | Event: CALLED | Ticket: #0001
+        "🔔 *NOW SERVING ALERT*
+
+     Ticket *#0001* (*Maria Santos*), please proceed to *Counter 1* immediately!
+
+     _TapNQue Student Queue Management_"
+     ```
+4. *(Optional Recall Verification)*: Click the **RECALL** button. Confirm that the lobby display pulses visual animations and a renewed Telegram notification is logged to the console.
+5. Click **MARK DONE** (Trigger 3):
+   - The transaction is finalized, wait duration is logged, and the ticket moves to history.
+   - The terminal console outputs the final completion message:
+     ```text
+     ✈️ [TELEGRAM BOT SIMULATION] To: @maria_student | Event: COMPLETED | Ticket: #0001
+        "✅ *SERVICE COMPLETED*
+
+     Ticket *#0001* has been completed at *Counter 1*.
+     Thank you for visiting TapNQue!
+
+     _TapNQue Student Queue Management_"
+     ```
+
+### Phase 4: Verify Audit Trail & Database Records in SQLite
+1. Return to Super Admin > **Settings** > click **VIEW MOCK TELEGRAM LOGS**.
+2. Review the interactive audit table. Confirm all three transaction dispatches (CREATED, CALLED, COMPLETED) are chronologically documented with exact timestamps, recipient handles (`@maria_student`), and full Markdown formatting.
+3. Query the local SQLite database from a terminal to verify thread-safe persistence:
+   ```bash
+   python -c "import sqlite3; conn = sqlite3.connect('data/kiosk.db'); print(conn.execute('SELECT ticket_number, telegram_chat_id, telegram_status_created, telegram_status_called, telegram_status_completed FROM tickets WHERE ticket_number=1').fetchone())"
+   ```
+4. Confirm terminal query output returns:
+   ```text
+   (1, '@maria_student', 'mock_sent', 'mock_sent', 'mock_sent')
+   ```
+
+---
+
+## 6. Safe Capstone Mock Simulation Mode
 
 To facilitate reliable academic defenses and offline panel demonstrations without requiring an active internet connection or public bot token, TapNQue includes a dedicated Mock Simulation Mode:
 - **Zero Configuration Required:** Enabled by default (`telegram_mock_mode = 1`). Operates locally without an active Telegram Bot Token or internet connection.
@@ -162,17 +264,17 @@ To facilitate reliable academic defenses and offline panel demonstrations withou
 
 ---
 
-## 6. Simultaneous Coexistence Guarantee & Deployment Guide
+## 7. Simultaneous Coexistence Guarantee & Deployment Guide
 
 A core architectural requirement is that both the PhilSMS implementation (`Project6`) and the Telegram QR Bot implementation (`Project6.1`) must be capable of running concurrently on the same machine without conflict.
 
-### 6.1 Dual-Directory Coexistence Guarantee
+### 7.1 Dual-Directory Coexistence Guarantee
 Because `PROJECT_ROOT` is resolved dynamically at runtime relative to the file location in `config.py`:
 - **Project6** (`/home/javvii/FreelanceProject/Project6`): Connects strictly to `Project6/data/kiosk.db` and operates on the `philsms-version` branch.
 - **Project6.1** (`/home/javvii/FreelanceProject/Project6.1`): Connects strictly to `Project6.1/data/kiosk.db` and operates on the `telegram-version` branch.
 - **Zero TCP Port Conflicts:** Neither station uses listening TCP server sockets (all communication is mediated via local SQLite and outbound HTTPS clients). Both versions can run simultaneously on developer workstations or campus testing setups.
 
-### 6.2 Station Launch Reference
+### 7.2 Station Launch Reference
 
 | Station Role | Python Launch Command | Windows Batch Script | Primary Screen Target |
 | :--- | :--- | :--- | :--- |
@@ -183,11 +285,11 @@ Because `PROJECT_ROOT` is resolved dynamically at runtime relative to the file l
 
 ---
 
-## 7. Database Schema & Data Dictionary
+## 8. Database Schema & Data Dictionary
 
 The SQLite database operates at `data/kiosk.db`.
 
-### 7.1 Tickets Table Schema (Telegram Extensions)
+### 8.1 Tickets Table Schema (Telegram Extensions)
 
 | Column Name | Data Type | Constraint | Operational Purpose |
 | :--- | :--- | :--- | :--- |
@@ -210,7 +312,7 @@ The SQLite database operates at `data/kiosk.db`.
 | `telegram_completed_status` | `TEXT` | `DEFAULT 'pending'` | Dispatch state of Trigger 3 Telegram alert |
 | `telegram_last_error` | `TEXT` | `NULL` | Error description if Telegram dispatch failed |
 
-### 7.2 Settings Table Schema (Telegram Extensions)
+### 8.2 Settings Table Schema (Telegram Extensions)
 Settings are stored as key-value pairs in the `settings` table:
 - `telegram_enabled`: '1' (active) or '0' (disabled).
 - `telegram_mock_mode`: '1' (local mock simulation) or '0' (live Telegram Bot API).
