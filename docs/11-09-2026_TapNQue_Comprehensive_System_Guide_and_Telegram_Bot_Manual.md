@@ -1,5 +1,5 @@
 # TapNQue Student Queue Management System
-## Comprehensive System Architecture, Administrative Authentication Guide, Telegram QR Bot API Operations Manual, and Hands-On Simulation Walkthrough
+## Comprehensive System Architecture, Administrative Authentication Guide, Telegram QR Bot API Operations Manual, and Hands-On Live Testing Walkthrough
 
 **Document ID:** TNQ-DOC-MAN-2026-03-TELEGRAM  
 **Release Version:** Version 2.2.0-PROD (Telegram QR Bot Integrated)  
@@ -155,53 +155,58 @@ To guarantee zero UI freezing during network dispatches, outbound Telegram notif
 
 ---
 
-## 5. Step-by-Step Hands-On Telegram Bot Simulation Walkthrough
+## 5. Step-by-Step Hands-On Telegram Bot Live Testing Walkthrough
 
-To allow thesis panelists, faculty evaluators, and system administrators to verify the full Telegram QR Bot notification lifecycle without requiring a live public bot token or internet connection, execute the following structured hands-on walkthrough:
+This section provides an end-to-end, hands-on live testing walkthrough using the official Telegram Bot API to verify real-time push notifications and QR code deep-linking across smartphones and desktop clients:
 
-### Phase 1: Verify Super Admin Settings & On-Demand Test Dispatch
-1. Launch the Super Admin Console:
+### Phase 1: Configure Super Admin for Live Telegram Dispatches & Test Message
+1. Ensure you have created your bot via `@BotFather` and obtained your HTTP API token and bot username.
+2. Launch the Super Admin Console:
    ```bash
    python run_admin.py
    ```
    Log in with credentials: Username `admin`, Password `admin123`.
-2. Navigate to the **Settings** tab and scroll to the **Telegram QR Bot Subsystem** group box.
-3. Confirm that the mode status badge indicates:
-   `● MOCK MODE ACTIVE (Safe Capstone Simulation — Local Logging Only, No Telegram Dispatch)`
-4. Confirm that the **Bot Username** field contains a handle (e.g. `TapNQueQueueBot`) and note the real-time QR code preview rendered adjacent to the credentials.
-5. Click **TEST TELEGRAM DISPATCH**. In the modal, enter `@maria_student` (or numeric chat ID `123456789`), and click **SEND TEST MESSAGE**.
-6. Confirm the success notification appears. Click **VIEW MOCK TELEGRAM LOGS** to inspect the `TelegramLogDialog` audit table containing the recorded test entry with timestamp, recipient, and formatted markdown body.
+3. Navigate to the **Settings** tab and scroll to the **Telegram QR Bot Subsystem** section.
+4. Paste your token into the **Telegram Bot Token** field and your username into **Telegram Bot Username** (e.g., `TapNQueQueueBot`).
+5. Click **SWITCH TO LIVE BOT**. The status badge will transition to green:
+   `● LIVE BOT ACTIVE (Official Telegram Cloud API Dispatches)`
+6. Click **SAVE CONFIGURATION** to commit the credentials into the SQLite database.
+7. On the tester's smartphone or desktop Telegram client, search for your bot handle or open `https://t.me/<bot_username>` and click **START** to open a conversation channel.
+8. In Super Admin, click **TEST TELEGRAM DISPATCH**. Enter the tester's Telegram username (`@maria_student`) or numeric chat ID, and click **SEND TEST MESSAGE**.
+9. Observe the tester's Telegram client: a live push notification arrives immediately with full Markdown formatting, confirming real cloud connectivity.
 
-### Phase 2: Generate Ticket on Student Kiosk with QR Deep-Link (Trigger 1: CREATED)
-1. In a separate terminal, launch the Student Kiosk terminal:
+### Phase 2: Generate Live Ticket on Student Kiosk with QR Deep-Link (Trigger 1: CREATED)
+1. In a separate terminal, launch the Student Registration Kiosk:
    ```bash
    python run_kiosk.py
    ```
-2. On the touchscreen check-in form, enter the following demonstration student profile:
+2. On the check-in form, enter student credentials using an active Telegram username to receive live updates:
    - **Student Full Name:** `Maria Santos`
    - **Student Identification Number:** `2023-20055`
    - **Email Address:** `maria@olfu.edu.ph`
    - **Mobile Number:** `0918 123 4567`
-   - **Telegram Username:** `@maria_student`
+   - **Telegram Username:** `@maria_student` *(or tester username)*
    - **Visitor Classification:** `Student`
    - **Purpose of Visit:** `Registrar - Transcript`
 3. Click the prominent green **GET TICKET** button.
-4. The high-resolution `TicketCreatedDialog` modal appears displaying:
+4. The high-resolution `TicketCreatedDialog` modal appears on screen displaying:
    - Sequential Ticket Number `#0001`.
-   - Dynamic QR code encoding `https://t.me/<bot_username>?start=ticket_0001`.
+   - Live QR code encoding `https://t.me/<bot_username>?start=ticket_0001`.
    - Instructional banner: *"Scan QR code with smartphone camera or Telegram app to receive queue updates!"*.
-   - Status confirmation pill: `Telegram notification dispatched.`
-5. Switch to the Kiosk terminal console to observe the asynchronous daemon log output:
-   ```text
-   ✈️ [TELEGRAM BOT SIMULATION] To: @maria_student | Event: CREATED | Ticket: #0001
-      "🎫 *TICKET CONFIRMED*
+   - Status pill: `Telegram notification dispatched.`
+5. Point a real smartphone camera at the on-screen QR code:
+   - The device opens Telegram directly to the bot with the pre-loaded ticket payload.
+   - Instantly, the Telegram app receives the live confirmation push alert:
+     ```text
+     🎫 *TICKET CONFIRMED*
 
-   Hello *Maria Santos*! Your ticket *#0001* has been registered.
-   • Queue Position: *1*
-   • Purpose: *Registrar - Transcript*
+     Hello *Maria Santos*! Your ticket *#0001* has been registered.
+     • Queue Position: *1*
+     • Purpose: *Registrar - Transcript*
 
-   _TapNQue Student Queue Management_"
-   ```
+     _TapNQue Student Queue Management_
+     ```
+6. Observe the Kiosk terminal console: the daemon confirms an HTTP 200 OK delivery response from `https://api.telegram.org/bot<token>/sendMessage`.
 
 ### Phase 3: Service Ticket at Staff Service Desk (Trigger 2: CALLED & Trigger 3: COMPLETED)
 1. In a third terminal window, launch the Staff Admin interface:
@@ -211,42 +216,39 @@ To allow thesis panelists, faculty evaluators, and system administrators to veri
    Log in with credentials: Username `staff`, Password `staff123`.
 2. Select **Counter 1**. Observe Ticket `#0001` (`Maria Santos`) positioned at the head of the priority queue table.
 3. Click **CALL NEXT** (Trigger 2):
-   - The Active Serving Card illuminates with Ticket `#0001` assigned to Counter 1.
-   - The public lobby display board triggers visual flash highlights and acoustic attention cues.
-   - The terminal console outputs the outbound Telegram dispatch:
+   - Active Serving Card illuminates with Ticket `#0001` assigned to Counter 1.
+   - Public TV lobby monitor pulses visual call flash animations and audio chimes.
+   - Within 500 milliseconds, the student's Telegram app vibrates with the live call alert:
      ```text
-     ✈️ [TELEGRAM BOT SIMULATION] To: @maria_student | Event: CALLED | Ticket: #0001
-        "🔔 *NOW SERVING ALERT*
+     🔔 *NOW SERVING ALERT*
 
      Ticket *#0001* (*Maria Santos*), please proceed to *Counter 1* immediately!
 
-     _TapNQue Student Queue Management_"
+     _TapNQue Student Queue Management_
      ```
-4. *(Optional Recall Verification)*: Click the **RECALL** button. Confirm that the lobby display pulses visual animations and a renewed Telegram notification is logged to the console.
+4. *(Optional Recall Verification)*: Click the **RECALL** button. Confirm that the lobby monitor re-pulses and an updated live call alert arrives on the student's Telegram client.
 5. Click **MARK DONE** (Trigger 3):
-   - The transaction is finalized, wait duration is logged, and the ticket moves to history.
-   - The terminal console outputs the final completion message:
+   - Transaction is finalized, wait duration is logged, and the ticket moves to history.
+   - The student's Telegram client receives the final live completion notification:
      ```text
-     ✈️ [TELEGRAM BOT SIMULATION] To: @maria_student | Event: COMPLETED | Ticket: #0001
-        "✅ *SERVICE COMPLETED*
+     ✅ *SERVICE COMPLETED*
 
      Ticket *#0001* has been completed at *Counter 1*.
      Thank you for visiting TapNQue!
 
-     _TapNQue Student Queue Management_"
+     _TapNQue Student Queue Management_
      ```
 
-### Phase 4: Verify Audit Trail & Database Records in SQLite
-1. Return to Super Admin > **Settings** > click **VIEW MOCK TELEGRAM LOGS**.
-2. Review the interactive audit table. Confirm all three transaction dispatches (CREATED, CALLED, COMPLETED) are chronologically documented with exact timestamps, recipient handles (`@maria_student`), and full Markdown formatting.
-3. Query the local SQLite database from a terminal to verify thread-safe persistence:
+### Phase 4: Verify Live Delivery Records & SQLite Persistence
+1. Query the local SQLite database from a terminal to verify that all three triggers recorded live `'sent'` status:
    ```bash
    python -c "import sqlite3; conn = sqlite3.connect('data/kiosk.db'); print(conn.execute('SELECT ticket_number, telegram_chat_id, telegram_status_created, telegram_status_called, telegram_status_completed FROM tickets WHERE ticket_number=1').fetchone())"
    ```
-4. Confirm terminal query output returns:
+2. Confirm terminal query output returns:
    ```text
-   (1, '@maria_student', 'mock_sent', 'mock_sent', 'mock_sent')
+   (1, '@maria_student', 'sent', 'sent', 'sent')
    ```
+   *(Note: in live bot mode, status values transition to `'sent'` upon Telegram Bot API HTTP 200 confirmation, verifying real cloud execution).*
 
 ---
 
