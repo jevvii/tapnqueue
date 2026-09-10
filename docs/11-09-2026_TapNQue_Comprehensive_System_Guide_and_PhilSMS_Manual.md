@@ -1,5 +1,5 @@
 # TapNQue Student Queue Management System
-## Comprehensive System Architecture, Administrative Authentication Guide, and PhilSMS Cloud API Operations Manual
+## Comprehensive System Architecture, Administrative Authentication Guide, PhilSMS Cloud API Operations Manual, and Hands-On Simulation Walkthrough
 
 **Document ID:** TNQ-DOC-MAN-2026-03-PHILSMS  
 **Release Version:** Version 2.2.0-PROD (PhilSMS Cloud REST API Integrated)  
@@ -201,7 +201,81 @@ TAPNQUE_SMS_ENABLED=1
 
 ---
 
-## 6. Safe Capstone Mock Simulation Mode
+## 6. Step-by-Step Hands-On PhilSMS Simulation Walkthrough
+
+To ensure panelists, evaluators, and system administrators can thoroughly verify the end-to-end PhilSMS notification lifecycle without spending prepaid SMS credits or requiring active internet connectivity, execute the following structured hands-on walkthrough:
+
+### Phase 1: Verify Super Admin Settings & On-Demand Test Dispatch
+1. Launch the Super Admin Console in a terminal:
+   ```bash
+   python run_admin.py
+   ```
+   Log in using default credentials (Username: `admin`, Password: `admin123`).
+2. Navigate to the **Settings** tab and scroll to the **SMS Gateway & Capstone Simulation** section.
+3. Confirm that the mode status badge displays:
+   `● MOCK MODE ACTIVE (Safe Capstone Simulation — Local Logging Only, Zero Credit Cost)`
+4. Click the **TEST DISPATCH (LIVE / MOCK)** button to launch the test dispatch modal.
+5. Enter test recipient phone number: `09171234567`, and click **SEND TEST MESSAGE**.
+6. Confirm the success notification prompt appears. Click **VIEW MOCK SMS LOGS** to inspect the `SMSLogDialog` audit table containing the recorded test entry with timestamp, recipient, and message text.
+
+### Phase 2: Generate Ticket on Student Kiosk (Trigger 1: CREATED)
+1. In a separate terminal window, start the Student Registration Kiosk:
+   ```bash
+   python run_kiosk.py
+   ```
+2. On the touchscreen check-in form, enter the following demonstration student profile:
+   - **Student Full Name:** `Juan Dela Cruz`
+   - **Student Identification Number:** `2023-10042`
+   - **Philippine Mobile Number:** `0917 987 6543`
+   - **Visitor Classification:** `Student`
+   - **Purpose of Visit:** `Enrollment`
+3. Click the prominent green **GET TICKET** button.
+4. The `TicketCreatedDialog` modal appears on screen displaying Ticket Number `#0001`, Queue Line Position: `1`, and the confirmation status pill reading `SMS dispatched successfully`. The modal auto-resets after 8 seconds.
+5. Switch to the Kiosk terminal console to observe the asynchronous daemon log output:
+   ```text
+   📱 [MOCK SMS SIMULATION] To: 09179876543 | Event: CREATED | Ticket: #0001
+      "Hello Juan Dela Cruz! Ticket #0001 confirmed. Pos: 1. Reason: Enrollment. Watch the display monitor! - TapNQue"
+   ```
+
+### Phase 3: Service Ticket at Staff Service Desk (Trigger 2: CALLED & Trigger 3: COMPLETED)
+1. In a third terminal window, launch the Staff Admin interface:
+   ```bash
+   python run_staff.py
+   ```
+   Log in using credentials (Username: `staff`, Password: `staff123`).
+2. Ensure Counter selector is set to **Counter 1**. Observe Ticket `#0001` (`Juan Dela Cruz`) seated at the head of the priority-sorted waiting queue table.
+3. Click **CALL NEXT** (Trigger 2):
+   - The Active Serving Card illuminates with Ticket `#0001` assigned to Counter 1.
+   - The lobby TV display pulses an acoustic chime and animated border flash.
+   - The terminal console outputs the outbound alert:
+     ```text
+     📱 [MOCK SMS SIMULATION] To: 09179876543 | Event: CALLED | Ticket: #0001
+        "NOW SERVING: Ticket #0001 (Juan Dela Cruz)! Please proceed to Counter 1 immediately. - TapNQue"
+     ```
+4. *(Optional Recall Verification)*: Click the **RECALL** button. Confirm that the lobby display re-triggers call animations and a renewed SMS alert is output to the terminal console.
+5. Click **MARK DONE** (Trigger 3):
+   - The transaction is finalized, wait time is logged, and the ticket moves to service history.
+   - The terminal console outputs the final completion notification:
+     ```text
+     📱 [MOCK SMS SIMULATION] To: 09179876543 | Event: COMPLETED | Ticket: #0001
+        "Ticket #0001 marked as completed. Thank you for visiting TapNQue!"
+     ```
+
+### Phase 4: Verify Audit Trail & Database Records in SQLite
+1. Return to the Super Admin window > **Settings** tab > click **VIEW MOCK SMS LOGS**.
+2. Review the session audit log table. Confirm all three transaction events (CREATED, CALLED, COMPLETED) are chronologically documented with exact timestamps, formatted mobile numbers, and complete message bodies.
+3. Query the local SQLite database from a terminal to verify thread-safe state persistence:
+   ```bash
+   python -c "import sqlite3; conn = sqlite3.connect('data/kiosk.db'); print(conn.execute('SELECT ticket_number, phone_formatted, sms_status_created, sms_status_called, sms_status_completed FROM tickets WHERE ticket_number=1').fetchone())"
+   ```
+4. Confirm terminal query output returns:
+   ```text
+   (1, '09179876543', 'mock_sent', 'mock_sent', 'mock_sent')
+   ```
+
+---
+
+## 7. Safe Capstone Mock Simulation Mode
 
 For academic capstone defenses, faculty panel demonstrations, and offline laboratory testing, TapNQue features an integrated Mock Simulation Mode:
 - **Zero Cost & No Internet Requirement:** Dispatches are simulated in-memory and logged to the local SQLite database without contacting PhilSMS servers or consuming prepaid balance.
@@ -214,11 +288,11 @@ For academic capstone defenses, faculty panel demonstrations, and offline labora
 
 ---
 
-## 7. Step-by-Step Deployment & Operations Guide
+## 8. Step-by-Step Deployment & Operations Guide
 
 TapNQue is engineered for cross-platform deployment on Windows 10/11 and Linux workstations:
 
-### 7.1 Environment Setup & Installation
+### 8.1 Environment Setup & Installation
 1. **Step 1:** Clone or extract project bundle to target directory (`/home/javvii/FreelanceProject/Project6`).
 2. **Step 2:** Initialize virtual environment: `python3 -m venv .venv`
 3. **Step 3:** Activate virtual environment:
@@ -226,7 +300,7 @@ TapNQue is engineered for cross-platform deployment on Windows 10/11 and Linux w
    - Windows: `.venv\Scriptsctivate`
 4. **Step 4:** Install dependencies: `pip install -r requirements.txt`
 
-### 7.2 Launching System Stations
+### 8.2 Launching System Stations
 
 | Station Role | Python Launch Command | Windows Batch Script | Primary Screen Target |
 | :--- | :--- | :--- | :--- |
@@ -237,11 +311,11 @@ TapNQue is engineered for cross-platform deployment on Windows 10/11 and Linux w
 
 ---
 
-## 8. Database Schema & Data Dictionary
+## 9. Database Schema & Data Dictionary
 
 The SQLite database operates at `data/kiosk.db`.
 
-### 8.1 Tickets Table Schema
+### 9.1 Tickets Table Schema
 
 | Column Name | Data Type | Constraint | Operational Purpose |
 | :--- | :--- | :--- | :--- |
@@ -264,7 +338,7 @@ The SQLite database operates at `data/kiosk.db`.
 | `sms_status_completed` | `TEXT` | `DEFAULT 'pending'` | Dispatch state of Trigger 3 SMS |
 | `sms_last_error` | `TEXT` | `NULL` | Error message or HTTP code if dispatch failed |
 
-### 8.2 Settings Table Schema
+### 9.2 Settings Table Schema
 Settings are stored as key-value pairs in the `settings` table:
 - `sms_enabled`: '1' (active) or '0' (disabled).
 - `sms_mock_mode`: '1' (local mock simulation) or '0' (live PhilSMS API dispatches).
