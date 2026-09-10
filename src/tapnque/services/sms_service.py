@@ -107,27 +107,29 @@ def send_via_gateway(
     timeout: int = 8,
 ) -> Tuple[bool, str, Optional[str]]:
     """
-    Send SMS via cloud REST API (Semaphore format).
+    Send SMS via cloud REST API (PhilSMS v3 format).
     Returns (success: bool, status: str, detail_or_error: Optional[str]).
     """
     if not api_key:
-        return False, "failed", "API key is missing or not configured."
+        return False, "failed", "API token is missing or not configured."
 
+    sender_id = sender_name.strip() if sender_name else "PhilSMS"
     payload = {
-        "apikey": api_key,
-        "number": phone,
+        "recipient": phone,
+        "sender_id": sender_id,
+        "type": "plain",
         "message": message,
     }
-    if sender_name:
-        payload["sendername"] = sender_name
 
-    data = urllib.parse.urlencode(payload).encode("utf-8")
+    data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         gateway_url,
         data=data,
         headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
             "User-Agent": "TapNQue-Kiosk/2.0",
-            "Content-Type": "application/x-www-form-urlencoded",
         },
         method="POST",
     )
@@ -135,7 +137,7 @@ def send_via_gateway(
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
             body = response.read().decode("utf-8")
-            logger.info("Cloud SMS API response: %s", body)
+            logger.info("PhilSMS Cloud API response: %s", body)
             return True, "sent", body
     except urllib.error.HTTPError as err:
         err_msg = f"HTTP {err.code}: {err.reason}"
@@ -144,11 +146,11 @@ def send_via_gateway(
             err_msg += f" - {body}"
         except Exception:
             pass
-        logger.warning("SMS gateway HTTP error: %s", err_msg)
+        logger.warning("PhilSMS gateway HTTP error: %s", err_msg)
         return False, "failed", err_msg
     except Exception as exc:
         err_msg = str(exc)
-        logger.warning("SMS gateway network error: %s", err_msg)
+        logger.warning("PhilSMS gateway network error: %s", err_msg)
         return False, "failed", err_msg
 
 

@@ -569,7 +569,7 @@ class SuperAdmin(QWidget):
         sms_layout.setSpacing(18)
 
         sms_intro = QLabel(
-            "Cloud SMS integration powered by Semaphore/PhilSMS gateway standard. "
+            "Cloud SMS integration powered by PhilSMS gateway standard (Pure software REST API, zero hardware required). "
             "Includes dedicated Capstone Mock Mode for local offline defense demonstrations without consuming prepaid credits."
         )
         sms_intro.setObjectName("summarySubtext")
@@ -628,16 +628,16 @@ class SuperAdmin(QWidget):
         cred_grid.setHorizontalSpacing(24)
         cred_grid.setVerticalSpacing(10)
 
-        api_key_lbl = QLabel("Semaphore API Key / Token:")
+        api_key_lbl = QLabel("PhilSMS API Token / Bearer Key:")
         api_key_lbl.setStyleSheet("font-weight: 600; font-size: 13px;")
         self.sms_api_key_input = QLineEdit()
-        self.sms_api_key_input.setPlaceholderText("Paste Semaphore API Key (Optional in Mock Mode)")
+        self.sms_api_key_input.setPlaceholderText("Paste PhilSMS API Token (Optional in Mock Mode)")
         self.sms_api_key_input.setEchoMode(QLineEdit.PasswordEchoOnEdit)
 
         sender_lbl = QLabel("Sender ID (Max 11 characters):")
         sender_lbl.setStyleSheet("font-weight: 600; font-size: 13px;")
         self.sms_sender_input = QLineEdit()
-        self.sms_sender_input.setPlaceholderText("e.g. TapNQue")
+        self.sms_sender_input.setPlaceholderText("e.g. PhilSMS, TapNQue")
         self.sms_sender_input.setMaxLength(11)
 
         cred_grid.addWidget(api_key_lbl, 0, 0)
@@ -755,13 +755,13 @@ class SuperAdmin(QWidget):
         else:
             has_api_key = bool(sms.get("sms_api_key", "").strip())
             if has_api_key:
-                self.sms_status_badge.setText("● LIVE GATEWAY ACTIVE (Semaphore Cloud REST API Dispatches)")
+                self.sms_status_badge.setText("● LIVE GATEWAY ACTIVE (PhilSMS Cloud REST API Dispatches)")
                 self.sms_status_badge.setStyleSheet(
                     "background: #e6f4ea; color: #137333; border: 1px solid #ceead6; border-radius: 14px; padding: 10px 16px; font-weight: 700; font-size: 14px;"
                 )
             else:
                 self.sms_status_badge.setText(
-                    "● LIVE GATEWAY SELECTED — API KEY MISSING (Dispatches are being simulated locally until a key is saved)"
+                    "● LIVE GATEWAY SELECTED — API TOKEN MISSING (Dispatches are being simulated locally until a token is saved)"
                 )
                 self.sms_status_badge.setStyleSheet(
                     "background: #fef7e0; color: #b05c00; border: 1px solid #f5c37d; border-radius: 14px; padding: 10px 16px; font-weight: 700; font-size: 14px;"
@@ -789,7 +789,7 @@ class SuperAdmin(QWidget):
         self.sms_completed_toggle_btn.style().polish(self.sms_completed_toggle_btn)
 
         self.sms_api_key_input.setText(sms.get("sms_api_key", ""))
-        self.sms_sender_input.setText(sms.get("sms_sender_name", "TapNQue"))
+        self.sms_sender_input.setText(sms.get("sms_sender_name", "PhilSMS"))
         self.sms_created_template_input.setText(sms.get("sms_template_created", ""))
         self.sms_called_template_input.setText(sms.get("sms_template_called", ""))
         self.sms_completed_template_input.setText(sms.get("sms_template_completed", ""))
@@ -812,9 +812,9 @@ class SuperAdmin(QWidget):
         if not new_mock and not sms.get("sms_api_key", "").strip():
             reply = QMessageBox.question(
                 self,
-                "No API Key Configured",
-                "You are switching to LIVE GATEWAY mode, but no Semaphore API key is saved.\n\n"
-                "Until a valid key is entered, all dispatches will be SIMULATED locally "
+                "No API Token Configured",
+                "You are switching to LIVE GATEWAY mode, but no PhilSMS API token is saved.\n\n"
+                "Until a valid token is entered, all dispatches will be SIMULATED locally "
                 "(no real SMS will be sent).\n\nSwitch to LIVE mode anyway?",
                 QMessageBox.Yes | QMessageBox.No,
             )
@@ -822,7 +822,7 @@ class SuperAdmin(QWidget):
                 return
         self.db.set_sms_mock_mode(new_mock)
         self._update_sms_ui()
-        mode_str = "MOCK SIMULATION MODE (Safe for defenses)" if new_mock else "LIVE GATEWAY MODE (Semaphore Cloud REST API)"
+        mode_str = "MOCK SIMULATION MODE (Safe for defenses)" if new_mock else "LIVE GATEWAY MODE (PhilSMS Cloud REST API)"
         QMessageBox.information(
             self,
             "SMS Mode Updated",

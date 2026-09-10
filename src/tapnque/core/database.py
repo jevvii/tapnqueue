@@ -18,6 +18,7 @@ from tapnque.config import (
     DEFAULT_SMS_MOCK_MODE,
     DEFAULT_SMS_SENDER_NAME,
     LEGACY_JSON_PATH,
+    SMS_GATEWAY_URL,
 )
 
 logger = logging.getLogger("tapnque.database")
@@ -142,6 +143,7 @@ class DatabaseManager:
                 ("sms_completed_enabled", "1"),
                 ("sms_api_key", DEFAULT_SMS_API_KEY),
                 ("sms_sender_name", DEFAULT_SMS_SENDER_NAME),
+                ("sms_gateway_url", SMS_GATEWAY_URL),
                 (
                     "sms_template_created",
                     "Hello {name}! Ticket #{ticket} is confirmed. Line position: {position}. Purpose: {purpose}. - TapNQue",
@@ -611,6 +613,7 @@ class DatabaseManager:
                 "sms_completed_enabled": bool(int(kv.get("sms_completed_enabled", "1"))),
                 "sms_api_key": kv.get("sms_api_key", DEFAULT_SMS_API_KEY),
                 "sms_sender_name": kv.get("sms_sender_name", DEFAULT_SMS_SENDER_NAME),
+                "sms_gateway_url": kv.get("sms_gateway_url", SMS_GATEWAY_URL),
                 "sms_template_created": kv.get(
                     "sms_template_created",
                     "Hello {name}! Ticket #{ticket} is confirmed. Line position: {position}. Purpose: {purpose}. - TapNQue",

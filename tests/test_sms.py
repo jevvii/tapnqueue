@@ -328,16 +328,17 @@ class TestSMSService(unittest.TestCase):
 
     @patch("urllib.request.urlopen")
     def test_send_via_gateway_success(self, mock_urlopen):
-        """Verify that send_via_gateway sends formatted POST request and parses response."""
+        """Verify that send_via_gateway sends formatted PhilSMS POST request and parses response."""
+        import json
         mock_response = MagicMock()
-        mock_response.read.return_value = b'[{"message_id": 12345, "status": "Queued"}]'
+        mock_response.read.return_value = b'{"status": "success", "message": "Message sent successfully", "data": {"message_id": 12345}}'
         mock_response.__enter__.return_value = mock_response
         mock_urlopen.return_value = mock_response
 
         success, status, body = send_via_gateway(
             phone="09171234567",
             message="Your ticket is ready.",
-            api_key="valid_semaphore_key",
+            api_key="valid_philsms_token",
             sender_name="TapNQue",
         )
 
@@ -348,18 +349,23 @@ class TestSMSService(unittest.TestCase):
         # Inspect the Request object passed to urlopen
         req = mock_urlopen.call_args[0][0]
         self.assertEqual(req.get_method(), "POST")
-        self.assertIn("semaphore.co/api/v4/messages", req.full_url)
-        decoded_data = req.data.decode("utf-8")
-        self.assertIn("apikey=valid_semaphore_key", decoded_data)
-        self.assertIn("number=09171234567", decoded_data)
-        self.assertIn("sendername=TapNQue", decoded_data)
+        self.assertIn("app.philsms.com/api/v3/sms/send", req.full_url)
+        self.assertEqual(req.headers.get("Authorization"), "Bearer valid_philsms_token")
+        self.assertEqual(req.headers.get("Content-type"), "application/json")
+        self.assertEqual(req.headers.get("Accept"), "application/json")
+
+        payload = json.loads(req.data.decode("utf-8"))
+        self.assertEqual(payload.get("recipient"), "09171234567")
+        self.assertEqual(payload.get("sender_id"), "TapNQue")
+        self.assertEqual(payload.get("type"), "plain")
+        self.assertEqual(payload.get("message"), "Your ticket is ready.")
 
     @patch("urllib.request.urlopen")
     def test_send_via_gateway_http_error(self, mock_urlopen):
-        """Verify that HTTP error responses are caught and return (False, 'failed', err_msg)."""
+        """Verify that PhilSMS HTTP error responses are caught and return (False, 'failed', err_msg)."""
         import urllib.error
         mock_urlopen.side_effect = urllib.error.HTTPError(
-            url="https://api.semaphore.co/api/v4/messages",
+            url="https://app.philsms.com/api/v3/sms/send",
             code=401,
             msg="Unauthorized",
             hdrs={},
@@ -369,7 +375,7 @@ class TestSMSService(unittest.TestCase):
         success, status, err = send_via_gateway(
             phone="09171234567",
             message="Your ticket is ready.",
-            api_key="bad_key",
+            api_key="bad_token",
             sender_name="TapNQue",
         )
 
