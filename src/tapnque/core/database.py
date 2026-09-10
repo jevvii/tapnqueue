@@ -17,7 +17,11 @@ from tapnque.config import (
     DEFAULT_SMS_ENABLED,
     DEFAULT_SMS_MOCK_MODE,
     DEFAULT_SMS_SENDER_NAME,
+    DEFAULT_TELEGRAM_ENABLED,
+    DEFAULT_TELEGRAM_MOCK_MODE,
     LEGACY_JSON_PATH,
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_BOT_USERNAME,
 )
 
 logger = logging.getLogger("tapnque.database")
@@ -76,7 +80,12 @@ class DatabaseManager:
                     sms_ticket_status TEXT DEFAULT 'pending',
                     sms_called_status TEXT DEFAULT 'pending',
                     sms_completed_status TEXT DEFAULT 'pending',
-                    sms_last_error TEXT
+                    sms_last_error TEXT,
+                    telegram_chat_id TEXT,
+                    telegram_ticket_status TEXT DEFAULT 'pending',
+                    telegram_called_status TEXT DEFAULT 'pending',
+                    telegram_completed_status TEXT DEFAULT 'pending',
+                    telegram_last_error TEXT
                 )
                 """
             )
@@ -89,6 +98,11 @@ class DatabaseManager:
                 ("sms_called_status", "TEXT DEFAULT 'pending'"),
                 ("sms_completed_status", "TEXT DEFAULT 'pending'"),
                 ("sms_last_error", "TEXT"),
+                ("telegram_chat_id", "TEXT"),
+                ("telegram_ticket_status", "TEXT DEFAULT 'pending'"),
+                ("telegram_called_status", "TEXT DEFAULT 'pending'"),
+                ("telegram_completed_status", "TEXT DEFAULT 'pending'"),
+                ("telegram_last_error", "TEXT"),
             ]
             for col_name, col_def in upgrade_columns:
                 if col_name not in existing_cols:
@@ -153,6 +167,22 @@ class DatabaseManager:
                 (
                     "sms_template_completed",
                     "Ticket #{ticket} completed. Thank you for visiting TapNQue!",
+                ),
+                ("telegram_enabled", "1" if DEFAULT_TELEGRAM_ENABLED else "0"),
+                ("telegram_mock_mode", "1" if DEFAULT_TELEGRAM_MOCK_MODE else "0"),
+                ("telegram_bot_token", TELEGRAM_BOT_TOKEN),
+                ("telegram_bot_username", TELEGRAM_BOT_USERNAME),
+                (
+                    "telegram_template_created",
+                    "🎟️ *TapNQue Ticket Confirmation*\n\nHello *{name}*!\nTicket Number: *#{ticket}*\nPosition: *{position}*\nPurpose: *{purpose}*\n\nPlease watch the lobby monitor for your number to be called!",
+                ),
+                (
+                    "telegram_template_called",
+                    "🔔 *NOW SERVING ALERT*\n\nTicket *#{ticket}* (*{name}*), please proceed to *Counter {counter}* immediately!\n\n_TapNQue Student Queue Management_",
+                ),
+                (
+                    "telegram_template_completed",
+                    "✅ *Service Completed*\n\nTicket *#{ticket}* has been marked as completed. Thank you for visiting TapNQue!",
                 ),
             ]
             for key, val in default_settings:
@@ -288,6 +318,7 @@ class DatabaseManager:
         purpose: str,
         visitor_type: str = "Student",
         phone_formatted: Optional[str] = None,
+        telegram_chat_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create a new ticket and add to waiting queue."""
         ticket_number = self.get_next_ticket_number()
@@ -298,8 +329,9 @@ class DatabaseManager:
                 """
                 INSERT INTO tickets (
                     ticket_number, name, student_id, email, phone, phone_formatted,
-                    visitor_type, purpose, priority_type, created_at, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    visitor_type, purpose, priority_type, created_at, status,
+                    telegram_chat_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ticket_number,
@@ -313,6 +345,7 @@ class DatabaseManager:
                     "Standard",
                     timestamp,
                     "waiting",
+                    telegram_chat_id,
                 ),
             )
 
@@ -328,6 +361,7 @@ class DatabaseManager:
             "priority_type": "Standard",
             "created_at": timestamp,
             "status": "waiting",
+            "telegram_chat_id": telegram_chat_id,
         }
 
     def get_ticket(self, ticket_number: int) -> Optional[Dict[str, Any]]:
@@ -716,6 +750,143 @@ class DatabaseManager:
                 "sms_called_status": row["sms_called_status"] or "pending",
                 "sms_completed_status": row["sms_completed_status"] or "pending",
                 "sms_last_error": row["sms_last_error"],
+            }
+
+    # ==================== Telegram Settings & Tracking ====================
+
+    def get_telegram_settings(self) -> Dict[str, Any]:
+        """Get all Telegram bot and simulation settings."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT key, value FROM settings WHERE key LIKE 'telegram_%'"
+            ).fetchall()
+            kv = {row["key"]: row["value"] for row in rows}
+
+            return {
+                "telegram_enabled": bool(int(kv.get("telegram_enabled", "1" if DEFAULT_TELEGRAM_ENABLED else "0"))),
+                "telegram_mock_mode": bool(int(kv.get("telegram_mock_mode", "1" if DEFAULT_TELEGRAM_MOCK_MODE else "0"))),
+                "telegram_bot_token": kv.get("telegram_bot_token", TELEGRAM_BOT_TOKEN),
+                "telegram_bot_username": kv.get("telegram_bot_username", TELEGRAM_BOT_USERNAME),
+                "telegram_template_created": kv.get(
+                    "telegram_template_created",
+                    "🎟️ *TapNQue Ticket Confirmation*\n\nHello *{name}*!\nTicket Number: *#{ticket}*\nPosition: *{position}*\nPurpose: *{purpose}*\n\nPlease watch the lobby monitor for your number to be called!",
+                ),
+                "telegram_template_called": kv.get(
+                    "telegram_template_called",
+                    "🔔 *NOW SERVING ALERT*\n\nTicket *#{ticket}* (*{name}*), please proceed to *Counter {counter}* immediately!\n\n_TapNQue Student Queue Management_",
+                ),
+                "telegram_template_completed": kv.get(
+                    "telegram_template_completed",
+                    "✅ *Service Completed*\n\nTicket *#{ticket}* has been marked as completed. Thank you for visiting TapNQue!",
+                ),
+            }
+
+    def update_telegram_settings(self, settings_dict: Dict[str, Any]):
+        """Persist updated Telegram settings into settings table."""
+        with self._connect() as conn:
+            items = []
+            for key, val in settings_dict.items():
+                if isinstance(val, bool):
+                    db_val = "1" if val else "0"
+                else:
+                    db_val = str(val or "").strip()
+                items.append((key, db_val))
+
+            conn.executemany(
+                "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                items,
+            )
+
+    def save_telegram_settings(
+        self,
+        bot_token: Optional[str] = None,
+        bot_username: Optional[str] = None,
+        template_created: Optional[str] = None,
+        template_called: Optional[str] = None,
+        template_completed: Optional[str] = None,
+    ):
+        """Convenience method to save Telegram bot credentials and notification templates."""
+        updates: Dict[str, Any] = {}
+        if bot_token is not None:
+            updates["telegram_bot_token"] = bot_token.strip()
+        if bot_username is not None:
+            updates["telegram_bot_username"] = bot_username.strip().lstrip("@")
+        if template_created is not None:
+            updates["telegram_template_created"] = template_created.strip()
+        if template_called is not None:
+            updates["telegram_template_called"] = template_called.strip()
+        if template_completed is not None:
+            updates["telegram_template_completed"] = template_completed.strip()
+        self.update_telegram_settings(updates)
+
+    def set_telegram_enabled(self, enabled: bool):
+        self.update_telegram_settings({"telegram_enabled": bool(enabled)})
+
+    def set_telegram_mock_mode(self, enabled: bool):
+        self.update_telegram_settings({"telegram_mock_mode": bool(enabled)})
+
+    def set_telegram_bot_token(self, token: str):
+        self.update_telegram_settings({"telegram_bot_token": token.strip()})
+
+    def set_telegram_bot_username(self, username: str):
+        self.update_telegram_settings({"telegram_bot_username": username.strip().lstrip("@")})
+
+    def update_ticket_telegram_status(
+        self,
+        ticket_number: int,
+        event_type: str,
+        status: str,
+        error_detail: Optional[str] = None,
+    ):
+        """Update Telegram delivery status flag for a ticket."""
+        col_map = {
+            "created": "telegram_ticket_status",
+            "called": "telegram_called_status",
+            "completed": "telegram_completed_status",
+        }
+        col_name = col_map.get(event_type.lower())
+        if not col_name:
+            return
+
+        error_msg = str(error_detail) if error_detail else None
+
+        with self._connect() as conn:
+            cursor = conn.execute(
+                f"UPDATE tickets SET {col_name} = ?, telegram_last_error = ? WHERE ticket_number = ?",
+                (status, error_msg, ticket_number),
+            )
+            if cursor.rowcount == 0:
+                logger.warning(
+                    "Telegram status update matched no ticket (ticket_number=%s, event=%s, status=%s)",
+                    ticket_number,
+                    event_type,
+                    status,
+                )
+
+    def get_ticket_telegram_status(self, ticket_number: int) -> Dict[str, Any]:
+        """Retrieve Telegram delivery status flags for a ticket."""
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT telegram_chat_id, telegram_ticket_status, telegram_called_status, telegram_completed_status, telegram_last_error
+                FROM tickets WHERE ticket_number = ?
+                """,
+                (ticket_number,),
+            ).fetchone()
+            if not row:
+                return {
+                    "telegram_chat_id": None,
+                    "telegram_ticket_status": "pending",
+                    "telegram_called_status": "pending",
+                    "telegram_completed_status": "pending",
+                    "telegram_last_error": None,
+                }
+            return {
+                "telegram_chat_id": row["telegram_chat_id"],
+                "telegram_ticket_status": row["telegram_ticket_status"] or "pending",
+                "telegram_called_status": row["telegram_called_status"] or "pending",
+                "telegram_completed_status": row["telegram_completed_status"] or "pending",
+                "telegram_last_error": row["telegram_last_error"],
             }
 
 

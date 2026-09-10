@@ -42,7 +42,16 @@ from tapnque.services.sms_service import (
     send_via_gateway,
     simulate_mock_sms,
 )
-from tapnque.ui.components.dialogs import SMSLogDialog
+from tapnque.services.telegram_service import (
+    clear_mock_telegram_history,
+    format_telegram_template,
+    generate_telegram_qr_pixmap,
+    get_mock_telegram_history,
+    get_telegram_bot_link,
+    send_via_telegram_api,
+    simulate_mock_telegram,
+)
+from tapnque.ui.components.dialogs import SMSLogDialog, TelegramLogDialog
 
 
 class StatCard(QFrame):
@@ -96,6 +105,7 @@ class SuperAdmin(QWidget):
         self._setup_ui()
         self._update_phone_toggle_ui()
         self._update_sms_ui()
+        self._update_telegram_ui()
         self._setup_timer()
 
     def _setup_ui(self):
@@ -689,6 +699,150 @@ class SuperAdmin(QWidget):
         sms_layout.addLayout(save_row)
 
         layout.addWidget(sms_group)
+
+        # 3. Telegram QR Bot System Configuration Group
+        telegram_group = QGroupBox("Telegram QR Bot System Configuration")
+        telegram_group.setObjectName("sectionPanel")
+        telegram_layout = QVBoxLayout(telegram_group)
+        telegram_layout.setContentsMargins(22, 18, 22, 22)
+        telegram_layout.setSpacing(18)
+
+        telegram_intro = QLabel(
+            "Official Telegram Bot API integration with QR deep-linking for queue alerts. "
+            "Includes dedicated Capstone Mock Mode for local offline defense demonstrations without requiring an active bot token."
+        )
+        telegram_intro.setObjectName("summarySubtext")
+        telegram_intro.setWordWrap(True)
+        telegram_layout.addWidget(telegram_intro)
+
+        # Status badge
+        self.telegram_status_badge = QLabel()
+        self.telegram_status_badge.setObjectName("statusBadge")
+        self.telegram_status_badge.setWordWrap(True)
+        telegram_layout.addWidget(self.telegram_status_badge)
+
+        # Button controls
+        tg_button_row = QHBoxLayout()
+        tg_button_row.setSpacing(12)
+
+        self.tg_master_toggle_btn = QPushButton()
+        self.tg_master_toggle_btn.setMinimumHeight(44)
+        self.tg_master_toggle_btn.clicked.connect(self._toggle_telegram_master)
+        tg_button_row.addWidget(self.tg_master_toggle_btn)
+
+        self.tg_mode_toggle_btn = QPushButton()
+        self.tg_mode_toggle_btn.setMinimumHeight(44)
+        self.tg_mode_toggle_btn.clicked.connect(self._toggle_telegram_mode)
+        tg_button_row.addWidget(self.tg_mode_toggle_btn)
+
+        self.tg_test_btn = QPushButton("TEST TELEGRAM DISPATCH")
+        self.tg_test_btn.setObjectName("secondaryButton")
+        self.tg_test_btn.setMinimumHeight(44)
+        self.tg_test_btn.clicked.connect(self._test_telegram_dispatch)
+        tg_button_row.addWidget(self.tg_test_btn)
+
+        self.tg_logs_btn = QPushButton("VIEW MOCK TELEGRAM LOGS")
+        self.tg_logs_btn.setObjectName("secondaryButton")
+        self.tg_logs_btn.setMinimumHeight(44)
+        self.tg_logs_btn.clicked.connect(self._view_telegram_logs)
+        tg_button_row.addWidget(self.tg_logs_btn)
+
+        tg_button_row.addStretch()
+        telegram_layout.addLayout(tg_button_row)
+
+        # Credentials & Bot Info
+        tg_cred_label = QLabel("BOT CREDENTIALS & DEEP LINKING")
+        tg_cred_label.setObjectName("sectionLabel")
+        telegram_layout.addWidget(tg_cred_label)
+
+        tg_cred_row = QHBoxLayout()
+        tg_cred_row.setSpacing(24)
+
+        tg_inputs_col = QVBoxLayout()
+        tg_inputs_col.setSpacing(12)
+
+        token_lbl = QLabel("Telegram Bot Token (from @BotFather):")
+        token_lbl.setStyleSheet("font-weight: 600; font-size: 13px;")
+        self.tg_token_input = QLineEdit()
+        self.tg_token_input.setPlaceholderText("e.g. 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ (Optional in Mock Mode)")
+        self.tg_token_input.setEchoMode(QLineEdit.PasswordEchoOnEdit)
+        tg_inputs_col.addWidget(token_lbl)
+        tg_inputs_col.addWidget(self.tg_token_input)
+
+        user_lbl = QLabel("Telegram Bot Username:")
+        user_lbl.setStyleSheet("font-weight: 600; font-size: 13px;")
+        self.tg_username_input = QLineEdit()
+        self.tg_username_input.setPlaceholderText("e.g. TapNQueBot")
+        self.tg_username_input.textChanged.connect(self._update_telegram_qr_preview)
+        tg_inputs_col.addWidget(user_lbl)
+        tg_inputs_col.addWidget(self.tg_username_input)
+
+        tg_cred_row.addLayout(tg_inputs_col, 2)
+
+        # Live QR code preview card
+        qr_preview_card = QFrame()
+        qr_preview_card.setStyleSheet(
+            "background: #ffffff; border: 1px solid #e3ebe3; border-radius: 18px; padding: 12px;"
+        )
+        qr_card_layout = QVBoxLayout(qr_preview_card)
+        qr_card_layout.setContentsMargins(12, 10, 12, 10)
+        qr_card_layout.setSpacing(6)
+        qr_card_layout.setAlignment(Qt.AlignCenter)
+
+        self.tg_qr_preview_label = QLabel()
+        self.tg_qr_preview_label.setAlignment(Qt.AlignCenter)
+        self.tg_qr_link_label = QLabel()
+        self.tg_qr_link_label.setAlignment(Qt.AlignCenter)
+        self.tg_qr_link_label.setStyleSheet("color: #0088cc; font-size: 11px; font-weight: 700;")
+        qr_card_layout.addWidget(self.tg_qr_preview_label)
+        qr_card_layout.addWidget(self.tg_qr_link_label)
+
+        tg_cred_row.addWidget(qr_preview_card, 1)
+        telegram_layout.addLayout(tg_cred_row)
+
+        # Notification Templates
+        tg_tmpl_label = QLabel("TELEGRAM NOTIFICATION TEMPLATES (Markdown Supported)")
+        tg_tmpl_label.setObjectName("sectionLabel")
+        telegram_layout.addWidget(tg_tmpl_label)
+
+        tg_tmpl_hint = QLabel("Dynamic tags supported: {name}, {ticket}, {position}, {purpose}, {counter}")
+        tg_tmpl_hint.setObjectName("summarySubtext")
+        telegram_layout.addWidget(tg_tmpl_hint)
+
+        tg_tmpl_col = QVBoxLayout()
+        tg_tmpl_col.setSpacing(12)
+
+        tg_t1_lbl = QLabel("1. Ticket Created Alert (Dispatched on Kiosk Registration):")
+        tg_t1_lbl.setStyleSheet("font-weight: 600; font-size: 13px;")
+        self.tg_created_tmpl_input = QLineEdit()
+        tg_tmpl_col.addWidget(tg_t1_lbl)
+        tg_tmpl_col.addWidget(self.tg_created_tmpl_input)
+
+        tg_t2_lbl = QLabel("2. Ticket Called Alert (Dispatched when Service Counter calls/recalls ticket):")
+        tg_t2_lbl.setStyleSheet("font-weight: 600; font-size: 13px;")
+        self.tg_called_tmpl_input = QLineEdit()
+        tg_tmpl_col.addWidget(tg_t2_lbl)
+        tg_tmpl_col.addWidget(self.tg_called_tmpl_input)
+
+        tg_t3_lbl = QLabel("3. Ticket Completed Alert (Dispatched when Service Counter marks ticket Done):")
+        tg_t3_lbl.setStyleSheet("font-weight: 600; font-size: 13px;")
+        self.tg_completed_tmpl_input = QLineEdit()
+        tg_tmpl_col.addWidget(tg_t3_lbl)
+        tg_tmpl_col.addWidget(self.tg_completed_tmpl_input)
+
+        telegram_layout.addLayout(tg_tmpl_col)
+
+        # Save Button Row
+        tg_save_row = QHBoxLayout()
+        self.tg_save_btn = QPushButton("SAVE TELEGRAM CONFIGURATION")
+        self.tg_save_btn.setObjectName("primaryButton")
+        self.tg_save_btn.setMinimumHeight(46)
+        self.tg_save_btn.clicked.connect(self._save_telegram_settings)
+        tg_save_row.addWidget(self.tg_save_btn)
+        tg_save_row.addStretch()
+        telegram_layout.addLayout(tg_save_row)
+
+        layout.addWidget(telegram_group)
         layout.addStretch()
 
         scroll.setWidget(container)
@@ -959,6 +1113,186 @@ class SuperAdmin(QWidget):
         dialog.refresh_btn.clicked.connect(refresh)
         dialog.clear_btn.clicked.connect(clear)
         dialog.exec()
+
+    def _update_telegram_ui(self):
+        tg = self.db.get_telegram_settings()
+        enabled = tg.get("telegram_enabled", True)
+        mock = tg.get("telegram_mock_mode", True)
+        token = tg.get("telegram_bot_token", "").strip()
+        username = tg.get("telegram_bot_username", "TapNQueBot").strip()
+
+        if not enabled:
+            self.telegram_status_badge.setText("○ TELEGRAM BOT SYSTEM DISABLED — Notifications will not be dispatched.")
+            self.telegram_status_badge.setStyleSheet(
+                "background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; border-radius: 14px; padding: 10px 16px; font-weight: 700; font-size: 14px;"
+            )
+            self.tg_master_toggle_btn.setText("ENABLE TELEGRAM SYSTEM")
+            self.tg_master_toggle_btn.setObjectName("primaryButton")
+            self.tg_mode_toggle_btn.setEnabled(False)
+        elif mock:
+            self.telegram_status_badge.setText(
+                "● MOCK MODE ACTIVE (Safe Capstone Simulation — Local Telegram Dispatches & Mock Logs Active)"
+            )
+            self.telegram_status_badge.setStyleSheet(
+                "background: #e8f0fe; color: #1967d2; border: 1px solid #aecbfa; border-radius: 14px; padding: 10px 16px; font-weight: 700; font-size: 14px;"
+            )
+            self.tg_master_toggle_btn.setText("DISABLE TELEGRAM")
+            self.tg_master_toggle_btn.setObjectName("dangerButton")
+            self.tg_mode_toggle_btn.setText("SWITCH TO LIVE BOT")
+            self.tg_mode_toggle_btn.setObjectName("secondaryButton")
+            self.tg_mode_toggle_btn.setEnabled(True)
+        else:
+            if token:
+                self.telegram_status_badge.setText("● LIVE TELEGRAM BOT ACTIVE (Official api.telegram.org Dispatches)")
+                self.telegram_status_badge.setStyleSheet(
+                    "background: #e6f4ea; color: #137333; border: 1px solid #ceead6; border-radius: 14px; padding: 10px 16px; font-weight: 700; font-size: 14px;"
+                )
+            else:
+                self.telegram_status_badge.setText(
+                    "● LIVE BOT SELECTED — BOT TOKEN MISSING (Dispatches are simulated locally until a token is saved)"
+                )
+                self.telegram_status_badge.setStyleSheet(
+                    "background: #fef7e0; color: #b05c00; border: 1px solid #f5c37d; border-radius: 14px; padding: 10px 16px; font-weight: 700; font-size: 14px;"
+                )
+            self.tg_master_toggle_btn.setText("DISABLE TELEGRAM")
+            self.tg_master_toggle_btn.setObjectName("dangerButton")
+            self.tg_mode_toggle_btn.setText("SWITCH TO MOCK SIMULATION")
+            self.tg_mode_toggle_btn.setObjectName("secondaryButton")
+            self.tg_mode_toggle_btn.setEnabled(True)
+
+        self.tg_master_toggle_btn.style().unpolish(self.tg_master_toggle_btn)
+        self.tg_master_toggle_btn.style().polish(self.tg_master_toggle_btn)
+        self.tg_mode_toggle_btn.style().unpolish(self.tg_mode_toggle_btn)
+        self.tg_mode_toggle_btn.style().polish(self.tg_mode_toggle_btn)
+
+        self.tg_token_input.setText(tg.get("telegram_bot_token", ""))
+        self.tg_username_input.setText(username)
+        self.tg_created_tmpl_input.setText(tg.get("telegram_template_created", ""))
+        self.tg_called_tmpl_input.setText(tg.get("telegram_template_called", ""))
+        self.tg_completed_tmpl_input.setText(tg.get("telegram_template_completed", ""))
+
+        self._update_telegram_qr_preview()
+
+    def _update_telegram_qr_preview(self):
+        username = self.tg_username_input.text().strip().lstrip("@") or "TapNQueBot"
+        bot_url = f"https://t.me/{username}"
+        pixmap = generate_telegram_qr_pixmap(bot_url, size=110)
+        if pixmap:
+            self.tg_qr_preview_label.setPixmap(pixmap)
+        self.tg_qr_link_label.setText(f"@{username}\n{bot_url}")
+
+    def _toggle_telegram_master(self):
+        tg = self.db.get_telegram_settings()
+        new_state = not tg.get("telegram_enabled", True)
+        self.db.set_telegram_enabled(new_state)
+        self._update_telegram_ui()
+        state_str = "ENABLED" if new_state else "DISABLED"
+        QMessageBox.information(
+            self,
+            "Telegram System Status",
+            f"Telegram notification subsystem is now {state_str}.",
+        )
+
+    def _toggle_telegram_mode(self):
+        tg = self.db.get_telegram_settings()
+        current_mock = tg.get("telegram_mock_mode", True)
+        new_mock = not current_mock
+        self.db.set_telegram_mock_mode(new_mock)
+        self._update_telegram_ui()
+        if new_mock:
+            QMessageBox.information(
+                self,
+                "Mock Mode Active",
+                "Switched to Safe Mock Mode.\nAll Telegram messages will be simulated locally and recorded in Mock Logs.",
+            )
+        else:
+            QMessageBox.information(
+                self,
+                "Live Mode Active",
+                "Switched to Live Telegram Bot Mode.\nMessages will be dispatched directly to Telegram API if a Bot Token is configured.",
+            )
+
+    def _save_telegram_settings(self):
+        token = self.tg_token_input.text().strip()
+        username = self.tg_username_input.text().strip().lstrip("@")
+        created_tmpl = self.tg_created_tmpl_input.text().strip()
+        called_tmpl = self.tg_called_tmpl_input.text().strip()
+        completed_tmpl = self.tg_completed_tmpl_input.text().strip()
+
+        self.db.save_telegram_settings(
+            bot_token=token,
+            bot_username=username,
+            template_created=created_tmpl,
+            template_called=called_tmpl,
+            template_completed=completed_tmpl,
+        )
+        self._update_telegram_ui()
+        QMessageBox.information(
+            self,
+            "Settings Saved",
+            "Telegram Bot configuration and message templates have been successfully updated.",
+        )
+
+    def _test_telegram_dispatch(self):
+        tg = self.db.get_telegram_settings()
+        is_mock = tg.get("telegram_mock_mode", True)
+        bot_token = tg.get("telegram_bot_token", "").strip()
+
+        chat_id, ok = QInputDialog.getText(
+            self,
+            "Test Telegram Dispatch",
+            "Enter recipient Telegram Chat ID or Username:\n(e.g., numeric chat ID like 123456789 or @student):",
+            text="@student",
+        )
+        if not ok or not chat_id.strip():
+            return
+
+        chat_id = chat_id.strip()
+        test_msg = "🔔 *TapNQue Test Alert*\n\nThis is a test notification verifying your Telegram Bot integration."
+
+        if is_mock or not bot_token:
+            simulate_mock_telegram(chat_id, test_msg, "test", 9999)
+            QMessageBox.information(
+                self,
+                "Test Dispatched (Mock Simulation)",
+                f"Simulated Telegram message to {chat_id} recorded in Mock Logs.\n\nContent:\n{test_msg}",
+            )
+        else:
+            success, status, err = send_via_telegram_api(chat_id, test_msg, bot_token)
+            if success:
+                QMessageBox.information(
+                    self,
+                    "Live Telegram Dispatch Successful",
+                    f"Message successfully sent via Telegram Bot API to {chat_id}!",
+                )
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Live Telegram Dispatch Failed",
+                    f"Failed to dispatch to Telegram API:\n{err}\n\nCheck your Bot Token and ensure the recipient has initiated a chat with your bot.",
+                )
+
+    def _view_telegram_logs(self):
+        dlg = TelegramLogDialog(self)
+        dlg.populate_logs(get_mock_telegram_history())
+
+        def _clear():
+            reply = QMessageBox.question(
+                dlg,
+                "Clear Logs",
+                "Are you sure you want to clear the session mock Telegram logs?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply == QMessageBox.Yes:
+                clear_mock_telegram_history()
+                dlg.populate_logs([])
+
+        def _refresh():
+            dlg.populate_logs(get_mock_telegram_history())
+
+        dlg.clear_btn.clicked.connect(_clear)
+        dlg.refresh_btn.clicked.connect(_refresh)
+        dlg.exec()
 
     def _format_counter_ticket(self, ticket: Any) -> str:
         if isinstance(ticket, int):

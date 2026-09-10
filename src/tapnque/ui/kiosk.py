@@ -26,6 +26,7 @@ from tapnque.config import get_asset_path
 from tapnque.core.database import get_database
 from tapnque.services.email_service import is_email_configured, send_ticket_email
 from tapnque.services.sms_service import sanitize_ph_phone_number, send_ticket_created_sms
+from tapnque.services.telegram_service import send_ticket_created_telegram
 from tapnque.ui.components.animations import AnimatedLoadingBar, AnimatedSpinner
 from tapnque.ui.components.dialogs import TicketCreatedDialog
 from tapnque.ui.components.keyboard import TouchKeyboardWidget
@@ -557,6 +558,11 @@ class StudentKiosk(QWidget):
         self.visitor_combo = QComboBox()
         self.visitor_combo.addItems(["Student", "Parent", "Guardian", "PWD"])
 
+        telegram_label = QLabel("TELEGRAM USERNAME / CHAT ID (OPTIONAL)")
+        telegram_label.setObjectName("fieldLabel")
+        self.telegram_input = QLineEdit()
+        self.telegram_input.setPlaceholderText("e.g. @username or Chat ID")
+
         purpose_label = QLabel("PURPOSE OF VISIT")
         purpose_label.setObjectName("fieldLabel")
         self.purpose_combo = QComboBox()
@@ -581,9 +587,11 @@ class StudentKiosk(QWidget):
         form_grid.addWidget(self.email_input, 3, 0)
         form_grid.addWidget(self.phone_input, 3, 1)
         form_grid.addWidget(visitor_label, 4, 0)
-        form_grid.addWidget(purpose_label, 4, 1)
+        form_grid.addWidget(telegram_label, 4, 1)
         form_grid.addWidget(self.visitor_combo, 5, 0)
-        form_grid.addWidget(self.purpose_combo, 5, 1)
+        form_grid.addWidget(self.telegram_input, 5, 1)
+        form_grid.addWidget(purpose_label, 6, 0, 1, 2)
+        form_grid.addWidget(self.purpose_combo, 7, 0, 1, 2)
         self._apply_phone_field_visibility()
 
         card_layout.addLayout(form_grid)
@@ -622,6 +630,7 @@ class StudentKiosk(QWidget):
             (self.id_input, "numeric"),
             (self.email_input, "alpha"),
             (self.phone_input, "numeric"),
+            (self.telegram_input, "alpha"),
         ):
             field.setProperty("keyboard_type", keyboard_type)
             field.installEventFilter(self)
@@ -748,6 +757,8 @@ class StudentKiosk(QWidget):
                 )
                 return
 
+        telegram_chat = self.telegram_input.text().strip()
+
         try:
             ticket = self.db.create_ticket(
                 name=name,
@@ -757,6 +768,7 @@ class StudentKiosk(QWidget):
                 purpose=purpose,
                 visitor_type=visitor_type,
                 phone_formatted=phone_formatted,
+                telegram_chat_id=telegram_chat,
             )
             queue_position = 1
             waiting_queue = self.db.get_waiting_queue()
@@ -782,6 +794,10 @@ class StudentKiosk(QWidget):
             if phone_formatted:
                 sms_sent = send_ticket_created_sms(ticket, queue_position)
 
+            telegram_sent = False
+            if telegram_chat:
+                telegram_sent = send_ticket_created_telegram(ticket, queue_position)
+
             self.keyboard.hide()
             confirmation = TicketCreatedDialog(
                 ticket=ticket,
@@ -789,9 +805,10 @@ class StudentKiosk(QWidget):
                 purpose=purpose,
                 email_sent=email_sent,
                 sms_sent=sms_sent,
+                telegram_sent=telegram_sent,
                 parent=self,
             )
-            confirmation.resize(960, 640)
+            confirmation.resize(960, 660)
             confirmation.exec()
             self._clear_form()
         except Exception as e:
@@ -802,6 +819,7 @@ class StudentKiosk(QWidget):
         self.id_input.clear()
         self.email_input.clear()
         self.phone_input.clear()
+        self.telegram_input.clear()
         self.visitor_combo.setCurrentIndex(0)
         self.purpose_combo.setCurrentIndex(0)
         self.keyboard.hide()

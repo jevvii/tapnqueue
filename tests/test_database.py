@@ -144,6 +144,48 @@ class TestDatabaseManager(unittest.TestCase):
         self.db.set_phone_number_enabled(True)
         self.assertTrue(self.db.get_app_settings()["phone_number_enabled"])
 
+    def test_telegram_settings_and_status(self):
+        """Verify Telegram settings retrieval, saving, and ticket telegram status updates."""
+        settings = self.db.get_telegram_settings()
+        self.assertTrue(settings.get("telegram_enabled"))
+        self.assertTrue(settings.get("telegram_mock_mode"))
+
+        # Update settings
+        self.db.save_telegram_settings(
+            bot_token="123456:TEST_TOKEN",
+            bot_username="CustomBot",
+            template_created="Ticket #{ticket} created",
+            template_called="Ticket #{ticket} called at Counter {counter}",
+            template_completed="Ticket #{ticket} done",
+        )
+        updated = self.db.get_telegram_settings()
+        self.assertEqual(updated["telegram_bot_token"], "123456:TEST_TOKEN")
+        self.assertEqual(updated["telegram_bot_username"], "CustomBot")
+
+        self.db.set_telegram_enabled(False)
+        self.assertFalse(self.db.get_telegram_settings()["telegram_enabled"])
+        self.db.set_telegram_enabled(True)
+
+        self.db.set_telegram_mock_mode(False)
+        self.assertFalse(self.db.get_telegram_settings()["telegram_mock_mode"])
+
+        # Create ticket with telegram_chat_id
+        ticket = self.db.create_ticket(
+            name="John Doe",
+            student_id="2023-12345",
+            email="john@example.com",
+            phone="09171234567",
+            purpose="Enrollment",
+            visitor_type="Student",
+            telegram_chat_id="@johndoe",
+        )
+        self.assertEqual(ticket["telegram_chat_id"], "@johndoe")
+
+        # Update telegram status
+        self.db.update_ticket_telegram_status(ticket["ticket_number"], "created", "sent", None)
+        status_info = self.db.get_ticket_telegram_status(ticket["ticket_number"])
+        self.assertEqual(status_info["telegram_ticket_status"], "sent")
+
 
 if __name__ == "__main__":
     unittest.main()

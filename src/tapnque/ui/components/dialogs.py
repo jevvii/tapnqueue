@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from tapnque.config import get_asset_path
+from tapnque.services.telegram_service import generate_telegram_qr_pixmap
 from tapnque.ui.components.animations import WaitingSignalAnimation
 
 
@@ -33,6 +34,7 @@ class TicketCreatedDialog(QDialog):
         purpose: str,
         email_sent: bool = False,
         sms_sent: bool = False,
+        telegram_sent: bool = False,
         parent=None,
     ):
         super().__init__(parent)
@@ -41,6 +43,7 @@ class TicketCreatedDialog(QDialog):
         self.purpose = purpose
         self.email_sent = email_sent
         self.sms_sent = sms_sent
+        self.telegram_sent = telegram_sent
         self.logo_source = get_asset_path("OLFU LOGO 1.png")
         self._setup_ui()
 
@@ -53,7 +56,7 @@ class TicketCreatedDialog(QDialog):
         self.setWindowTitle("Ticket Created")
         self.setModal(True)
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
-        self.setMinimumSize(860, 620)
+        self.setMinimumSize(920, 660)
         self.setStyleSheet(
             """
             TicketCreatedDialog {
@@ -215,6 +218,28 @@ class TicketCreatedDialog(QDialog):
         purpose_label.setAlignment(Qt.AlignCenter)
         badge_layout.addWidget(purpose_label)
 
+        # Telegram QR Code
+        qr_pixmap = generate_telegram_qr_pixmap(self.ticket["ticket_number"], size=120)
+        if qr_pixmap:
+            qr_frame = QFrame()
+            qr_frame.setStyleSheet(
+                "background: #ffffff; border: 1px solid rgba(255, 255, 255, 0.2); "
+                "border-radius: 16px; padding: 6px;"
+            )
+            qr_layout = QVBoxLayout(qr_frame)
+            qr_layout.setContentsMargins(6, 6, 6, 6)
+            qr_layout.setSpacing(4)
+            qr_img = QLabel()
+            qr_img.setPixmap(qr_pixmap)
+            qr_img.setAlignment(Qt.AlignCenter)
+            qr_layout.addWidget(qr_img)
+            badge_layout.addWidget(qr_frame, 0, Qt.AlignCenter)
+
+            qr_hint = QLabel("Scan to track on Telegram")
+            qr_hint.setStyleSheet("color: #a0c4ab; font-size: 11px; font-weight: 700; letter-spacing: 1px;")
+            qr_hint.setAlignment(Qt.AlignCenter)
+            badge_layout.addWidget(qr_hint)
+
         center_row.addWidget(badge, 1)
 
         detail_panel = QFrame()
@@ -246,6 +271,8 @@ class TicketCreatedDialog(QDialog):
             status_notes.append("Email sent")
         if self.sms_sent:
             status_notes.append("SMS dispatched")
+        if self.telegram_sent:
+            status_notes.append("Telegram alert sent")
         if status_notes:
             status_text = " • ".join(status_notes) + " successfully."
         else:
@@ -591,6 +618,167 @@ class SMSLogDialog(QDialog):
                 status_item.setForeground(QColor("#0a8c3c"))
             elif "MOCK" in status:
                 status_item.setForeground(QColor("#1565c0"))
+            else:
+                status_item.setForeground(QColor("#c0392b"))
+            self.log_table.setItem(row, 4, status_item)
+
+            self.log_table.setItem(row, 5, QTableWidgetItem(msg))
+
+
+class TelegramLogDialog(QDialog):
+    """Modal dialog displaying Telegram Bot dispatch logs and simulation audit trail."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Mock Telegram Bot Simulation Log (This Session)")
+        self.setMinimumSize(960, 560)
+        self._setup_ui()
+
+    def _setup_ui(self):
+        self.setStyleSheet(
+            """
+            TelegramLogDialog {
+                background: #eef3ef;
+            }
+            QFrame#card {
+                background: #ffffff;
+                border-radius: 20px;
+                border: 1px solid #e3ebe3;
+            }
+            QLabel#dialogTitle {
+                color: #18241b;
+                font-size: 22px;
+                font-weight: 800;
+            }
+            QLabel#dialogSubtitle {
+                color: #55665a;
+                font-size: 13px;
+            }
+            QTableWidget {
+                background: #fdfdfd;
+                border: 1px solid #e3ebe3;
+                border-radius: 14px;
+                gridline-color: #f0f0f0;
+                font-size: 12px;
+            }
+            QHeaderView::section {
+                background: #edf2ee;
+                color: #33483a;
+                font-weight: 700;
+                padding: 10px;
+                border: none;
+                border-bottom: 1px solid #d7e3d8;
+            }
+            QPushButton#primaryButton {
+                background: #0088cc;
+                color: white;
+                border: none;
+                border-radius: 14px;
+                padding: 10px 20px;
+                font-weight: 700;
+            }
+            QPushButton#secondaryButton {
+                background: #edf2ee;
+                color: #294032;
+                border: none;
+                border-radius: 14px;
+                padding: 10px 20px;
+                font-weight: 700;
+            }
+            QPushButton#dangerButton {
+                background: #fbe9e7;
+                color: #c0392b;
+                border: none;
+                border-radius: 14px;
+                padding: 10px 20px;
+                font-weight: 700;
+            }
+            """
+        )
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        card = QFrame()
+        card.setObjectName("card")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(24, 20, 24, 20)
+        card_layout.setSpacing(14)
+
+        header_col = QVBoxLayout()
+        header_col.setSpacing(4)
+        title = QLabel("Mock Telegram Bot Simulation Log")
+        title.setObjectName("dialogTitle")
+        subtitle = QLabel(
+            "Shows only Telegram messages simulated in Mock Mode during this session (in-memory, most recent 100). "
+            "Live bot API dispatches are tracked per ticket in the database, not in this log."
+        )
+        subtitle.setObjectName("dialogSubtitle")
+        header_col.addWidget(title)
+        header_col.addWidget(subtitle)
+        card_layout.addLayout(header_col)
+
+        self.log_table = QTableWidget()
+        self.log_table.setColumnCount(6)
+        self.log_table.setHorizontalHeaderLabels(
+            ["Timestamp", "Event", "Ticket #", "Chat ID / Recipient", "Status", "Dispatched Telegram Message Content"]
+        )
+        self.log_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.log_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.log_table.verticalHeader().setVisible(False)
+        self.log_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.log_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.log_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.log_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.log_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.log_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
+        card_layout.addWidget(self.log_table)
+
+        btn_row = QHBoxLayout()
+        self.clear_btn = QPushButton("CLEAR LOGS")
+        self.clear_btn.setObjectName("dangerButton")
+        self.refresh_btn = QPushButton("REFRESH")
+        self.refresh_btn.setObjectName("secondaryButton")
+        self.close_btn = QPushButton("CLOSE")
+        self.close_btn.setObjectName("primaryButton")
+
+        btn_row.addWidget(self.clear_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(self.refresh_btn)
+        btn_row.addWidget(self.close_btn)
+        card_layout.addLayout(btn_row)
+
+        layout.addWidget(card)
+
+        self.close_btn.clicked.connect(self.close)
+
+    def populate_logs(self, logs: List[Dict[str, Any]]):
+        """Populate the log table with records."""
+        self.log_table.setRowCount(len(logs))
+        for row, entry in enumerate(reversed(logs)):
+            ts = entry.get("timestamp", "")
+            try:
+                dt = datetime.fromisoformat(ts)
+                formatted_ts = dt.strftime("%Y-%m-%d %I:%M:%S %p")
+            except Exception:
+                formatted_ts = str(ts)
+
+            event = str(entry.get("event_type", "telegram")).upper()
+            t_num = f"#{entry.get('ticket_number'):04d}" if entry.get("ticket_number") else "N/A"
+            chat_id = str(entry.get("chat_id", ""))
+            status = str(entry.get("status", "unknown")).upper()
+            msg = entry.get("message", "")
+
+            self.log_table.setItem(row, 0, QTableWidgetItem(formatted_ts))
+            self.log_table.setItem(row, 1, QTableWidgetItem(event))
+            self.log_table.setItem(row, 2, QTableWidgetItem(t_num))
+            self.log_table.setItem(row, 3, QTableWidgetItem(chat_id))
+
+            status_item = QTableWidgetItem(status)
+            if "DELIVERED" in status or "SENT" in status or "SUCCESS" in status:
+                status_item.setForeground(QColor("#0088cc"))
+            elif "MOCK" in status:
+                status_item.setForeground(QColor("#0a8c3c"))
             else:
                 status_item.setForeground(QColor("#c0392b"))
             self.log_table.setItem(row, 4, status_item)
