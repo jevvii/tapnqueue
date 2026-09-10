@@ -640,10 +640,17 @@ class SuperAdmin(QWidget):
         self.sms_sender_input.setPlaceholderText("e.g. PhilSMS, TapNQue")
         self.sms_sender_input.setMaxLength(11)
 
+        gateway_url_lbl = QLabel("PhilSMS API Endpoint (OAuth 2.0 / REST v3):")
+        gateway_url_lbl.setStyleSheet("font-weight: 600; font-size: 13px;")
+        self.sms_gateway_url_input = QLineEdit()
+        self.sms_gateway_url_input.setPlaceholderText("https://dashboard.philsms.com/api/v3/sms/send")
+
         cred_grid.addWidget(api_key_lbl, 0, 0)
         cred_grid.addWidget(sender_lbl, 0, 1)
         cred_grid.addWidget(self.sms_api_key_input, 1, 0)
         cred_grid.addWidget(self.sms_sender_input, 1, 1)
+        cred_grid.addWidget(gateway_url_lbl, 2, 0, 1, 2)
+        cred_grid.addWidget(self.sms_gateway_url_input, 3, 0, 1, 2)
         sms_layout.addLayout(cred_grid)
 
         # Notification Templates
@@ -790,6 +797,7 @@ class SuperAdmin(QWidget):
 
         self.sms_api_key_input.setText(sms.get("sms_api_key", ""))
         self.sms_sender_input.setText(sms.get("sms_sender_name", "PhilSMS"))
+        self.sms_gateway_url_input.setText(sms.get("sms_gateway_url", "https://dashboard.philsms.com/api/v3/sms/send"))
         self.sms_created_template_input.setText(sms.get("sms_template_created", ""))
         self.sms_called_template_input.setText(sms.get("sms_template_called", ""))
         self.sms_completed_template_input.setText(sms.get("sms_template_completed", ""))
@@ -861,9 +869,11 @@ class SuperAdmin(QWidget):
         called_tmpl = self.sms_called_template_input.text().strip()
         completed_tmpl = self.sms_completed_template_input.text().strip()
 
+        gateway_url = self.sms_gateway_url_input.text().strip() or "https://dashboard.philsms.com/api/v3/sms/send"
         updates = {
             "sms_api_key": api_key,
             "sms_sender_name": sender_name,
+            "sms_gateway_url": gateway_url,
         }
         if created_tmpl:
             updates["sms_template_created"] = created_tmpl

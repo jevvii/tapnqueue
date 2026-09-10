@@ -12,7 +12,7 @@
 
 ## 1. Executive Summary & Rationale
 
-The **TapNQue** Queue Management System has transitioned its primary cloud SMS notification gateway client from **Semaphore** (`api.semaphore.co`) to **PhilSMS** (`app.philsms.com`).
+The **TapNQue** Queue Management System has transitioned its primary cloud SMS notification gateway client from **Semaphore** (`api.semaphore.co`) to **PhilSMS** (`dashboard.philsms.com`).
 
 ### Why Migrate to PhilSMS?
 1. **No Minimum Top-Up Barrier:** Semaphore mandates a minimum credit reload of **₱500.00 to ₱1,000.00**, creating an unnecessary hurdle for student capstone groups and budget-conscious academic departments. PhilSMS has **zero minimum reload requirement**, allowing credit purchases as low as ₱50 or ₱100.
@@ -27,7 +27,7 @@ The **TapNQue** Queue Management System has transitioned its primary cloud SMS n
 | Parameter | Semaphore (Legacy) | PhilSMS (New Standard) |
 | :--- | :--- | :--- |
 | **API Version** | Semaphore API v4 | PhilSMS REST API v3 |
-| **Endpoint URL** | `https://api.semaphore.co/api/v4/messages` | `https://app.philsms.com/api/v3/sms/send` |
+| **Endpoint URL** | `https://api.semaphore.co/api/v4/messages` | `https://dashboard.philsms.com/api/v3/sms/send` |
 | **HTTP Method** | `POST` | `POST` |
 | **Content-Type** | `application/x-www-form-urlencoded` | `application/json` |
 | **Authorization** | Passed in body (`apikey=...`) | Standard `Authorization: Bearer <TOKEN>` header |
@@ -50,7 +50,7 @@ apikey=your_semaphore_key&number=09171234567&message=Ticket+%230001+confirmed&se
 **PhilSMS (New):**
 ```http
 POST /api/v3/sms/send HTTP/1.1
-Host: app.philsms.com
+Host: dashboard.philsms.com
 Authorization: Bearer your_philsms_api_token_here
 Content-Type: application/json
 Accept: application/json
@@ -72,7 +72,7 @@ Accept: application/json
 The migration touched configuration, the service tier, database schema defaults, the Super Admin GUI, unit tests, and configuration templates:
 
 ### 3.1 [`src/tapnque/config.py`](file:///home/javvii/FreelanceProject/Project6/src/tapnque/config.py)
-* Updated `SMS_GATEWAY_URL` default to `"https://app.philsms.com/api/v3/sms/send"`.
+* Updated `SMS_GATEWAY_URL` default to `"https://dashboard.philsms.com/api/v3/sms/send"`.
 * Updated `DEFAULT_SMS_SENDER_NAME` default to `"PhilSMS"`.
 
 ### 3.2 [`src/tapnque/services/sms_service.py`](file:///home/javvii/FreelanceProject/Project6/src/tapnque/services/sms_service.py)
@@ -83,12 +83,14 @@ The migration touched configuration, the service tier, database schema defaults,
   - Parses the JSON response body and trusts the payload, not just the HTTP code: a dispatch is only recorded as `sent` when the body reports `"status": "success"` (or carries no status field at all). Gateway-level rejections returned with HTTP 200 — e.g. `{"status": "error", "message": "Insufficient SMS balance."}` — are recorded as `failed`, with the gateway's message captured in the ticket's `sms_last_error` column.
 
 ### 3.3 [`src/tapnque/core/database.py`](file:///home/javvii/FreelanceProject/Project6/src/tapnque/core/database.py)
-* Added `sms_gateway_url` to `default_settings` in `_initialize_db()` (seeded from the `TAPNQUE_SMS_GATEWAY_URL` env override when present).
+* Added `sms_gateway_url` to `default_settings` in `_initialize_db()` (seeded from the `TAPNQUE_SMS_GATEWAY_URL` env override when present, defaulting to `https://dashboard.philsms.com/api/v3/sms/send`).
+* Added automatic database migration in `_initialize_db()` that updates any existing settings row containing the legacy `https://app.philsms.com/api/v3/sms/send` endpoint to `https://dashboard.philsms.com/api/v3/sms/send`.
 * Ensured `get_sms_settings()` reads and returns `sms_gateway_url`.
-* The background dispatch worker now passes the configured `sms_gateway_url` into `send_via_gateway(gateway_url=...)`, so the stored setting is live and authoritative after database seeding, consistent with the other SMS settings.
+* The background dispatch worker passes the configured `sms_gateway_url` into `send_via_gateway(gateway_url=...)`, so the stored setting is live and authoritative after database seeding, consistent with the other SMS settings.
 
 ### 3.4 [`src/tapnque/ui/super_admin.py`](file:///home/javvii/FreelanceProject/Project6/src/tapnque/ui/super_admin.py)
 * Updated group box header and descriptive subtitle to reference PhilSMS.
+* Added dedicated `PhilSMS API Endpoint (OAuth 2.0 / REST v3)` input field allowing operators to review or modify the API URL directly from the GUI.
 * Updated input label: `PhilSMS API Token / Bearer Key:`.
 * Updated input placeholder: `Paste PhilSMS API Token (Optional in Mock Mode)`.
 * Updated live status badge: `● LIVE GATEWAY ACTIVE (PhilSMS Cloud REST API Dispatches)`.
@@ -96,7 +98,7 @@ The migration touched configuration, the service tier, database schema defaults,
 * Added client-side Sender ID validation on save: alphanumeric only, maximum 11 characters (enforced via input `maxLength` plus a save-time check that rejects spaces/symbols with an explanatory dialog). Custom Sender IDs must additionally be registered and carrier-approved in the PhilSMS dashboard; otherwise the pre-approved default `PhilSMS` should be used.
 
 ### 3.5 [`.env.example`](file:///home/javvii/FreelanceProject/Project6/.env.example)
-* Documented `TAPNQUE_SMS_GATEWAY_URL=https://app.philsms.com/api/v3/sms/send`.
+* Documented `TAPNQUE_SMS_GATEWAY_URL=https://dashboard.philsms.com/api/v3/sms/send`.
 * Documented `TAPNQUE_SMS_API_KEY=your_philsms_api_token_here`.
 * Documented `TAPNQUE_SMS_SENDER_NAME=PhilSMS`.
 
@@ -111,7 +113,7 @@ The migration touched configuration, the service tier, database schema defaults,
 If you have an existing TapNQue deployment running on Semaphore, follow these steps to migrate:
 
 ### Step 1: Obtain a PhilSMS Account & Token
-1. Register at `https://app.philsms.com/` (free registration).
+1. Register at `https://dashboard.philsms.com/` (free registration).
 2. Check your email to verify your account.
 3. In the PhilSMS dashboard, navigate to **API Settings** / **API Access Tokens**.
 4. Generate a new API Token and copy the secret key.
@@ -119,7 +121,7 @@ If you have an existing TapNQue deployment running on Semaphore, follow these st
 ### Step 2: Update Configuration
 If using a `.env` file, update your credentials:
 ```env
-TAPNQUE_SMS_GATEWAY_URL=https://app.philsms.com/api/v3/sms/send
+TAPNQUE_SMS_GATEWAY_URL=https://dashboard.philsms.com/api/v3/sms/send
 TAPNQUE_SMS_API_KEY=your_copied_philsms_token
 TAPNQUE_SMS_SENDER_NAME=PhilSMS
 ```
@@ -127,11 +129,12 @@ TAPNQUE_SMS_SENDER_NAME=PhilSMS
 ### Step 3: Update GUI Settings in Super Admin
 1. Launch Super Admin: `python run_admin.py` (Login: `admin` / `admin123`).
 2. Go to the **Settings** tab and scroll to **SMS Gateway & Capstone Simulation**.
-3. Paste your PhilSMS token into **PhilSMS API Token / Bearer Key**.
-4. Set Sender ID to `PhilSMS` (or your carrier-approved institutional sender ID — alphanumeric, max 11 characters; the input field enforces this on save).
-5. Click **SWITCH TO LIVE GATEWAY**.
-6. Click **SAVE SMS CONFIGURATION**.
-7. Click **TEST DISPATCH** with a mobile number to verify live delivery!
+3. Confirm that **PhilSMS API Endpoint** is set to `https://dashboard.philsms.com/api/v3/sms/send`.
+4. Paste your PhilSMS token into **PhilSMS API Token / Bearer Key**.
+5. Set Sender ID to `PhilSMS` (or your carrier-approved institutional sender ID — alphanumeric, max 11 characters; the input field enforces this on save).
+6. Click **SWITCH TO LIVE GATEWAY**.
+7. Click **SAVE SMS CONFIGURATION**.
+8. Click **TEST DISPATCH** with a mobile number to verify live delivery!
 
 ---
 

@@ -32,7 +32,7 @@ SENDER_EMAIL = os.getenv("TAPNQUE_SENDER_EMAIL", "").strip()
 SENDER_PASSWORD = os.getenv("TAPNQUE_SENDER_PASSWORD", "").strip()
 
 # SMS Gateway & Capstone Simulation Settings (PhilSMS v3 REST API)
-SMS_GATEWAY_URL = os.getenv("TAPNQUE_SMS_GATEWAY_URL", "https://app.philsms.com/api/v3/sms/send").strip()
+SMS_GATEWAY_URL = os.getenv("TAPNQUE_SMS_GATEWAY_URL", "https://dashboard.philsms.com/api/v3/sms/send").strip()
 DEFAULT_SMS_ENABLED = os.getenv("TAPNQUE_SMS_ENABLED", "1").strip().lower() in ("1", "true", "yes")
 DEFAULT_SMS_MOCK_MODE = os.getenv("TAPNQUE_SMS_MOCK_MODE", "1").strip().lower() in ("1", "true", "yes")
 DEFAULT_SMS_API_KEY = os.getenv("TAPNQUE_SMS_API_KEY", "").strip()

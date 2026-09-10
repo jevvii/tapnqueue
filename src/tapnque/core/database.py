@@ -163,6 +163,12 @@ class DatabaseManager:
                     (key, val),
                 )
 
+            # Auto-migrate legacy app.philsms.com endpoint to new dashboard.philsms.com OAuth/API endpoint
+            conn.execute(
+                "UPDATE settings SET value = ? WHERE key = 'sms_gateway_url' AND value = 'https://app.philsms.com/api/v3/sms/send'",
+                (SMS_GATEWAY_URL,),
+            )
+
             if conn.execute("SELECT COUNT(*) FROM statistics").fetchone()[0] == 0:
                 conn.executemany(
                     "INSERT INTO statistics (key, value) VALUES (?, ?)",

@@ -5,7 +5,7 @@
 **Release Version:** Version 2.2.0-PROD (PhilSMS Cloud REST API Integrated)  
 **Target Audience:** Capstone Defense Panelists, Campus Administrators, Service Staff, Technical Support  
 **Technology Stack:** Python 3.10+, PySide6 (Qt6 GUI), SQLite3 (WAL Mode), Standard Urllib Gateway Engine  
-**Outbound SMS Protocol:** PhilSMS Cloud REST API (`https://app.philsms.com/api/v3/sms/send`) + Safe Capstone Mock Mode  
+**Outbound SMS Protocol:** PhilSMS Cloud REST API (`https://dashboard.philsms.com/api/v3/sms/send`) + Safe Capstone Mock Mode  
 **Publication & Effective Date:** September 11, 2026 (11-09-2026)  
 **Standard Word Version:** [`11-09-2026_TapNQue_Comprehensive_System_Guide_and_PhilSMS_Manual.docx`](11-09-2026_TapNQue_Comprehensive_System_Guide_and_PhilSMS_Manual.docx)
 
@@ -31,9 +31,9 @@ In accordance with campus infrastructure optimization requirements, the system e
 
 ### 2.1 Student Touchscreen Kiosk Station (`run_kiosk.py`)
 The Student Kiosk operates as the primary user intake station. It is optimized for commercial touchscreen panels and kiosk housings:
-1. **Animated Startup Sequence:** Implements `LoadingScreen` with progressive campus service synchronization checks before revealing the check-in interface. Startup timer can be bypassed with `Escape`, `Return`, or `Space`.
+1. **Animated Startup Sequence:** Implements `LoadingScreen` with progressive campus service synchronization checks before revealing the check-in interface. Startup timer can be bypassed with Escape, Return, or Space.
 2. **Touch-Optimized Registration Form:** Gathers Student Name, Student Number (formatted as `2023-00000`), Email Address, Philippine Mobile Number, Visitor Type, and Purpose of Visit.
-3. **Dynamic Virtual Keyboard:** An integrated on-screen keyboard (`TouchKeyboardWidget`) slides up upon input focus, dynamically toggling between QWERTY ('alpha') and numeric keypad ('numeric') modes.
+3. **Dynamic Virtual Keyboard:** An integrated on-screen keyboard (`TouchKeyboardWidget`) slides up upon input focus, dynamically toggling between QWERTY (`alpha`) and numeric keypad (`numeric`) modes.
 4. **Philippine Mobile Sanitization:** Mobile numbers are verified via `sanitize_ph_phone_number()`, normalizing valid inputs into canonical 11-digit format (`09XXXXXXXXX`) while rejecting malformed inputs.
 5. **Priority Classification Matrix:** PWD visitors are automatically assigned 'High Priority', Parents and Guardians receive 'Priority', and standard Students receive FIFO 'Standard' queuing.
 6. **Confirmation Modal & Auto-Reset:** `TicketCreatedDialog` displays the generated 4-digit ticket number, queue position, purpose, and confirmation pills ('Email sent • SMS dispatched successfully') with an 8-second auto-dismiss timer.
@@ -52,7 +52,7 @@ The Super Admin dashboard provides executive oversight, queue telemetry, and com
 1. **Analytics & Queue Telemetry (Tab 1):** Displays StatCards for Total Served, Average Wait Time, Active Waiting, and Serving Counters, accompanied by a visual queue health gauge and wait-time distribution snapshot.
 2. **Queue Monitor (Tab 2):** Consolidated multi-counter queue table showing all waiting and serving students with real-time wait times and status badges.
 3. **Student Kiosk Settings:** Master toggle allowing administrators to show or hide the phone number input field on the student registration kiosk.
-4. **PhilSMS Gateway Management:** Full control over PhilSMS operations, including Live/Mock mode toggles, API Bearer Token configuration, Sender ID specification, and individual trigger controls.
+4. **PhilSMS Gateway Management:** Full control over PhilSMS operations, including Live/Mock mode toggles, API Endpoint URL, API Bearer Token configuration, Sender ID specification, and individual trigger controls.
 5. **Template Customization:** Dynamic message template editors supporting contextual replacement tags (`{name}`, `{ticket}`, `{position}`, `{purpose}`, `{counter}`).
 6. **Interactive Test Dispatch Tool:** Allows administrators to send a test SMS to any valid Philippine mobile number, verifying live API credentials or mock simulation behavior.
 7. **Mock SMS Log Inspector:** In-memory session audit viewer (`SMSLogDialog`) displaying the most recent 100 simulated SMS messages with timestamps, recipients, and content.
@@ -93,14 +93,14 @@ TapNQue implements Option B (Tier 2 Pure Software Cloud SMS) powered by PhilSMS.
 
 ### 4.1 API Specifications & Payload Structure
 The integration utilizes PhilSMS REST API v3:
-- **Endpoint URL:** `https://app.philsms.com/api/v3/sms/send`
+- **Endpoint URL:** `https://dashboard.philsms.com/api/v3/sms/send`
 - **HTTP Method:** `POST`
 - **Authentication Header:** `Authorization: Bearer <philsms_api_token>`
 - **Request Headers:** `Content-Type: application/json`, `Accept: application/json`
 - **JSON Request Payload:**
   ```json
   {
-    "recipient": "09171234567",
+    "recipient": "639171234567",
     "sender_id": "PhilSMS",
     "type": "plain",
     "message": "Your ticket #0042 is confirmed..."
@@ -126,10 +126,10 @@ To prevent network latency from freezing the graphical user interface, dispatche
 This section provides the end-to-end procedure for creating a PhilSMS cloud account, generating API credentials, procuring SMS credits, and binding the gateway to the TapNQue system.
 
 ### 5.1 Account Registration & Portal Onboarding
-1. **Access Portal:** Open a web browser and navigate to `https://app.philsms.com/`.
+1. **Access Portal:** Open a web browser and navigate to `https://dashboard.philsms.com/`.
 2. **Create Account:** Click **Register** / **Sign Up** and complete the registration form with your institution or project email, full legal name, and a secure password.
 3. **Email Verification:** Access your email inbox and click the verification link sent by the PhilSMS automated activation engine.
-4. **Dashboard Access:** Log in to the PhilSMS dashboard at `https://app.philsms.com/login` to confirm account activation.
+4. **Dashboard Access:** Log in to the PhilSMS dashboard at `https://dashboard.philsms.com/login` to confirm account activation.
 
 ### 5.2 Generating API Access Tokens (Bearer Key)
 1. **Navigate to API Settings:** In the left-hand navigation sidebar of the PhilSMS dashboard, select **Developers** (or **API Settings**) > **API Access Tokens**.
@@ -163,16 +163,16 @@ Administrators can configure the PhilSMS gateway using either the Graphical User
    ```
 2. Log in using administrative credentials (`admin` / `admin123`).
 3. Select the **Settings** tab and scroll to the **SMS Gateway & Capstone Simulation** section.
-4. Paste your secret token into the **PhilSMS API Token / Bearer Key** input field.
-5. Set the **Sender Name / Sender ID** to `PhilSMS` (or your verified custom sender ID).
-6. Verify that the Gateway Endpoint displays `https://app.philsms.com/api/v3/sms/send`.
+4. Verify that the **PhilSMS API Endpoint (OAuth 2.0 / REST v3)** displays `https://dashboard.philsms.com/api/v3/sms/send`.
+5. Paste your secret token into the **PhilSMS API Token / Bearer Key** input field.
+6. Set the **Sender Name / Sender ID** to `PhilSMS` (or your verified custom sender ID).
 7. Click the toggle button **SWITCH TO LIVE GATEWAY**. The status badge will change to a green indicator reading `● LIVE GATEWAY ACTIVE (PhilSMS Cloud REST API Dispatches)`.
 8. Click **SAVE SMS CONFIGURATION** to commit the settings into the local SQLite database.
 
 #### Method B: Configuration via Environment Variables (`.env`)
 For automated deployments and headless servers, create or update the `.env` file in the project root:
 ```env
-TAPNQUE_SMS_GATEWAY_URL=https://app.philsms.com/api/v3/sms/send
+TAPNQUE_SMS_GATEWAY_URL=https://dashboard.philsms.com/api/v3/sms/send
 TAPNQUE_SMS_API_KEY=your_copied_philsms_api_bearer_token
 TAPNQUE_SMS_SENDER_NAME=PhilSMS
 TAPNQUE_SMS_MOCK_MODE=0
@@ -193,10 +193,10 @@ TAPNQUE_SMS_ENABLED=1
 | HTTP Status / Error | Diagnostic Cause | Immediate Remediation Action |
 | :--- | :--- | :--- |
 | **HTTP 200 OK (`success: true`)** | Message accepted by PhilSMS gateway and enqueued for telco dispatch | Normal operation; message will be delivered to the carrier network. |
-| **HTTP 401 Unauthorized** | The API Bearer token is missing, expired, or typed incorrectly | Verify the Bearer token in Super Admin Settings or `.env`. Re-generate a token in the PhilSMS dashboard if needed. |
+| **HTTP 401 Unauthorized / Error: Unauthenticated.** | The API Bearer token is missing, expired, or typed incorrectly, or calling legacy `app.philsms.com` with a token generated on `dashboard.philsms.com` | Verify that the endpoint is set to `https://dashboard.philsms.com/api/v3/sms/send` and that your API Bearer token matches your dashboard token. Re-generate a token in the PhilSMS dashboard if needed. |
 | **HTTP 403 Forbidden** | Requested Sender ID is unapproved or account requires verification | Set Sender ID back to default `PhilSMS`. Verify account email activation in the PhilSMS dashboard. |
 | **HTTP 422 Unprocessable Entity** | Recipient phone number is improperly formatted or required parameter missing | Ensure phone number conforms to Philippine 11-digit format (`09XXXXXXXXX`). Check that message body is non-empty. |
-| **HTTP 402 / Insufficient Balance** | Account SMS balance has depleted to zero | Log in to `https://app.philsms.com/` and reload credits via GCash or Maya. |
+| **HTTP 402 / Insufficient Balance** | Account SMS balance has depleted to zero | Log in to `https://dashboard.philsms.com/` and reload credits via GCash or Maya. |
 | **Connection Timeout (> 8s)** | Internet connectivity disruption between station and PhilSMS cloud servers | Check campus Wi-Fi / Ethernet connectivity. The asynchronous daemon logs the error without freezing the station. |
 
 ---
@@ -212,7 +212,7 @@ This section provides a complete, hands-on testing walkthrough using the actual 
    ```
    Log in using administrative credentials (Username: `admin`, Password: `admin123`).
 2. Navigate to the **Settings** tab and locate the **SMS Gateway & Capstone Simulation** section.
-3. Ensure your active PhilSMS secret Bearer Token is entered into the **PhilSMS API Token / Bearer Key** field, and Sender ID is set to `PhilSMS`.
+3. Confirm that **PhilSMS API Endpoint** is set to `https://dashboard.philsms.com/api/v3/sms/send`, paste your PhilSMS secret Bearer Token into **PhilSMS API Token / Bearer Key**, and ensure Sender ID is set to `PhilSMS`.
 4. Click **SWITCH TO LIVE GATEWAY**. Confirm that the status badge changes to green:
    `● LIVE GATEWAY ACTIVE (PhilSMS Cloud REST API Dispatches)`
 5. Click **SAVE SMS CONFIGURATION** to commit the live mode setting into the SQLite database.
@@ -237,7 +237,7 @@ This section provides a complete, hands-on testing walkthrough using the actual 
    ```text
    "Hello Juan Dela Cruz! Ticket #0001 confirmed. Pos: 1. Reason: Enrollment. Watch the display monitor! - TapNQue"
    ```
-6. Observe the Kiosk terminal console: the asynchronous daemon logs the live dispatch and records an HTTP 200 OK response from `https://app.philsms.com/api/v3/sms/send`.
+6. Observe the Kiosk terminal console: the asynchronous daemon logs the live dispatch and records an HTTP 200 OK response from `https://dashboard.philsms.com/api/v3/sms/send`.
 
 ### Phase 3: Service Ticket at Staff Service Desk (Trigger 2: CALLED & Trigger 3: COMPLETED)
 1. In a third terminal window, launch the Staff Admin interface:
@@ -271,7 +271,7 @@ This section provides a complete, hands-on testing walkthrough using the actual 
    (1, '09179876543', 'sent', 'sent', 'sent')
    ```
    *(Note: in live mode, status values transition to `'sent'` upon gateway HTTP 200 confirmation, verifying live cloud dispatch).*
-3. Log in to the PhilSMS Web Portal at `https://app.philsms.com/login` and navigate to **Outbox / SMS History** to review carrier timestamps, telco routing networks (Smart/Globe/Dito), and deducted balance.
+3. Log in to the PhilSMS Web Portal at `https://dashboard.philsms.com/login` and navigate to **Outbox / SMS History** to review carrier timestamps, telco routing networks (Smart/Globe/Dito), and deducted balance.
 
 ---
 
@@ -280,9 +280,9 @@ This section provides a complete, hands-on testing walkthrough using the actual 
 For academic capstone defenses, faculty panel demonstrations, and offline laboratory testing, TapNQue features an integrated Mock Simulation Mode:
 - **Zero Cost & No Internet Requirement:** Dispatches are simulated in-memory and logged to the local SQLite database without contacting PhilSMS servers or consuming prepaid balance.
 - **Terminal Audit Feedback:** Dispatches output formatted simulation blocks to stdout:
-  ```text
-  [MOCK SMS] To: 09171234567 | Event: CREATED | Msg: 'Hello Juan! Ticket #0001 is confirmed...'
-  ```
+   ```text
+   [MOCK SMS] To: 09171234567 | Event: CREATED | Msg: 'Hello Juan! Ticket #0001 is confirmed...'
+   ```
 - **GUI Log Inspector (`SMSLogDialog`):** Administrators can review all simulated dispatches in real-time by clicking 'VIEW MOCK SMS LOGS' in Super Admin.
 - **Failsafe Fallback:** If Super Admin is toggled to 'LIVE GATEWAY' but the API Token is empty, the system automatically falls back to Mock Simulation, preventing runtime crashes.
 
@@ -342,7 +342,7 @@ The SQLite database operates at `data/kiosk.db`.
 Settings are stored as key-value pairs in the `settings` table:
 - `sms_enabled`: '1' (active) or '0' (disabled).
 - `sms_mock_mode`: '1' (local mock simulation) or '0' (live PhilSMS API dispatches).
-- `sms_gateway_url`: URL for PhilSMS endpoint (default: `https://app.philsms.com/api/v3/sms/send`).
+- `sms_gateway_url`: URL for PhilSMS endpoint (default: `https://dashboard.philsms.com/api/v3/sms/send`).
 - `sms_api_key`: PhilSMS API Bearer Token.
 - `sms_sender_name`: Registered Sender ID (e.g. 'PhilSMS' or 'TapNQue').
 - `sms_completed_enabled`: '1' (dispatch completed SMS) or '0' (suppress completion SMS).

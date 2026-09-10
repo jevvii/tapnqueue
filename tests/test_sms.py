@@ -356,7 +356,7 @@ class TestSMSService(unittest.TestCase):
         # Inspect the Request object passed to urlopen
         req = mock_urlopen.call_args[0][0]
         self.assertEqual(req.get_method(), "POST")
-        self.assertIn("app.philsms.com/api/v3/sms/send", req.full_url)
+        self.assertIn("dashboard.philsms.com/api/v3/sms/send", req.full_url)
         self.assertEqual(req.headers.get("Authorization"), "Bearer valid_philsms_token")
         self.assertEqual(req.headers.get("Content-type"), "application/json")
         self.assertEqual(req.headers.get("Accept"), "application/json")
@@ -392,7 +392,7 @@ class TestSMSService(unittest.TestCase):
         """Verify that PhilSMS HTTP error responses are caught and return (False, 'failed', err_msg)."""
         import urllib.error
         mock_urlopen.side_effect = urllib.error.HTTPError(
-            url="https://app.philsms.com/api/v3/sms/send",
+            url="https://dashboard.philsms.com/api/v3/sms/send",
             code=401,
             msg="Unauthorized",
             hdrs={},
