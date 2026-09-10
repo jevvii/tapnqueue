@@ -9,6 +9,7 @@ import logging
 import queue
 import re
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -30,6 +31,9 @@ logger = logging.getLogger("tapnque.telegram")
 MOCK_TELEGRAM_HISTORY: List[Dict[str, Any]] = []
 _MOCK_TELEGRAM_LOCK = threading.Lock()
 
+# Settings-table key storing the rolling roster of recent bot contacts (JSON list)
+RECENT_USERS_SETTING_KEY = "telegram_recent_users"
+
 
 # ==================== Link & QR Code Generation ====================
 
@@ -40,7 +44,7 @@ def get_telegram_bot_link(ticket_number: Optional[int] = None) -> str:
     """
     db = get_database()
     settings = db.get_telegram_settings()
-    username = settings.get("telegram_bot_username", TELEGRAM_BOT_USERNAME) or "TapNQueBot"
+    username = settings.get("telegram_bot_username", TELEGRAM_BOT_USERNAME) or ""
     username = username.strip().lstrip("@")
 
     if ticket_number:
@@ -128,11 +132,39 @@ def format_telegram_template(template: str, context: Dict[str, Any]) -> str:
 
 def fetch_recent_telegram_users(bot_token: str, timeout: int = 5) -> List[Dict[str, Any]]:
     """
-    Query getUpdates on the Telegram Bot to retrieve users who recently interacted with the bot.
+    Retrieve users who recently interacted with the bot, for one-tap test dispatch.
+    Merges two sources:
+      1. Locally recorded contacts captured by the background link listener
+         (persists across polling acknowledgment and app restarts).
+      2. Pending getUpdates from the Telegram API (unacknowledged updates only).
     Returns a list of dicts with keys: chat_id, username, first_name, last_name, display_name.
     """
+    users: List[Dict[str, Any]] = []
+    seen_ids = set()
+
+    db = get_database()
+    try:
+        cached = json.loads(db.get_setting(RECENT_USERS_SETTING_KEY, "[]") or "[]")
+        if isinstance(cached, list):
+            for entry in cached:
+                chat_id = str(entry.get("chat_id", ""))
+                if chat_id and chat_id not in seen_ids:
+                    seen_ids.add(chat_id)
+                    users.append(
+                        {
+                            "chat_id": chat_id,
+                            "username": (entry.get("username") or "").strip().lstrip("@"),
+                            "first_name": (entry.get("first_name") or "").strip(),
+                            "last_name": (entry.get("last_name") or "").strip(),
+                            "display_name": entry.get("display_name") or f"User {chat_id}",
+                        }
+                    )
+    except (ValueError, TypeError):
+        pass
+
     if not bot_token:
-        return []
+        return users
+
     url = f"https://api.telegram.org/bot{bot_token}/getUpdates"
     try:
         req = urllib.request.Request(
@@ -145,9 +177,7 @@ def fetch_recent_telegram_users(bot_token: str, timeout: int = 5) -> List[Dict[s
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             if not data.get("ok"):
-                return []
-            users = []
-            seen_ids = set()
+                return users
             for item in reversed(data.get("result", [])):
                 msg = (
                     item.get("message")
@@ -158,8 +188,8 @@ def fetch_recent_telegram_users(bot_token: str, timeout: int = 5) -> List[Dict[s
                     continue
                 chat = msg.get("chat") or {}
                 chat_id = chat.get("id")
-                if chat_id and chat_id not in seen_ids:
-                    seen_ids.add(chat_id)
+                if chat_id and str(chat_id) not in seen_ids:
+                    seen_ids.add(str(chat_id))
                     username = (chat.get("username") or "").strip().lstrip("@")
                     first_name = (chat.get("first_name") or "").strip()
                     last_name = (chat.get("last_name") or "").strip()
@@ -175,7 +205,7 @@ def fetch_recent_telegram_users(bot_token: str, timeout: int = 5) -> List[Dict[s
             return users
     except Exception as exc:
         logger.debug("Failed to fetch Telegram getUpdates: %s", exc)
-        return []
+        return users
 
 
 def resolve_telegram_chat_id(target: str, bot_token: str) -> Tuple[Optional[str], Optional[str]]:
@@ -214,10 +244,72 @@ def resolve_telegram_chat_id(target: str, bot_token: str) -> Tuple[Optional[str]
     return None, (
         f"Could not find an active Telegram chat for '@{clean_username}'.\n\n"
         f"In Telegram:\n"
-        f"1. Open @OlfuTapNQue_bot on your phone or PC.\n"
+        f"1. Open your TapNQue bot on the phone or PC.\n"
         f"2. Tap 'START' (or send /start) so the bot has permission to message you.\n"
         f"3. Enter your numeric Chat ID (check @userinfobot) or try again with @{clean_username}."
     )
+
+
+def validate_telegram_bot_token(bot_token: str, timeout: int = 6) -> Tuple[bool, Optional[str], Optional[str]]:
+    """
+    Validate a bot token against the official getMe endpoint.
+    Returns (is_valid, bot_username, error_message). On success the username can be
+    used to auto-configure the deep-link QR code so admins never type it by hand.
+    """
+    token = (bot_token or "").strip()
+    if not token:
+        return False, None, "Bot token is empty."
+
+    url = f"https://api.telegram.org/bot{token}/getMe"
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "TapNQue-TelegramBot/2.0",
+                "Accept": "application/json",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if data.get("ok") and isinstance(data.get("result"), dict):
+                username = (data["result"].get("username") or "").strip().lstrip("@")
+                return True, username or None, None
+            return False, None, "Unexpected response from Telegram getMe."
+    except urllib.error.HTTPError as err:
+        if err.code in (401, 404):
+            return False, None, "Invalid bot token. Copy the exact token from @BotFather and try again."
+        return False, None, f"Telegram rejected the token (HTTP {err.code})."
+    except Exception as exc:
+        return False, None, f"Could not reach api.telegram.org: {exc}"
+
+
+def parse_start_payload(payload: str) -> Optional[int]:
+    """
+    Extract a ticket number from a /start deep-link payload.
+    Accepts 'ticket_0042', 'ticket-42', '42', etc. Returns None when no ticket matches.
+    """
+    text = (payload or "").strip()
+    if not text:
+        return None
+    match = re.search(r"ticket[_-]?(\d{1,7})", text, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+    if text.isdigit():
+        return int(text)
+    return None
+
+
+def is_telegram_qr_available() -> bool:
+    """
+    True when the kiosk ticket dialog should offer the scan-to-link QR card:
+    the Telegram feature is enabled and a real bot username is configured.
+    """
+    db = get_database()
+    settings = db.get_telegram_settings()
+    if not settings.get("telegram_enabled", True):
+        return False
+    username = (settings.get("telegram_bot_username", "") or "").strip().lstrip("@")
+    return bool(username)
 
 
 def send_via_telegram_api(
@@ -348,6 +440,7 @@ class _TelegramQueueManager:
                     daemon=True,
                 )
                 self._worker_thread.start()
+        ensure_link_listener()
 
     def enqueue(
         self,
@@ -408,6 +501,222 @@ class _TelegramQueueManager:
 
 # Global singleton queue manager
 _telegram_queue = _TelegramQueueManager()
+
+
+# ==================== Deep-Link Auto-Link Listener ====================
+
+class _TelegramLinkListener:
+    """
+    Background getUpdates long-poll listener that makes the QR deep-link flow
+    fully automatic. When a student scans the ticket QR and taps START in
+    Telegram, the bot receives '/start ticket_XXXX'; this listener binds that
+    user's chat ID to the ticket and dispatches the confirmation alert — no
+    chat-ID typing, no manual setup, works even for first-time Telegram users.
+    """
+
+    POLL_INTERVAL_SECONDS = 2
+    LONG_POLL_TIMEOUT = 25
+    OFFSET_SETTING_KEY = "telegram_update_offset"
+
+    def __init__(self):
+        self._thread: Optional[threading.Thread] = None
+        self._start_lock = threading.Lock()
+
+    def ensure_started(self):
+        with self._start_lock:
+            if self._thread is None or not self._thread.is_alive():
+                self._thread = threading.Thread(
+                    target=self._run_loop,
+                    name="TapNQue-TelegramLinkListener",
+                    daemon=True,
+                )
+                self._thread.start()
+
+    def _run_loop(self):
+        while True:
+            try:
+                db = get_database()
+                settings = db.get_telegram_settings()
+                token = (settings.get("telegram_bot_token", "") or "").strip()
+                listening = (
+                    settings.get("telegram_enabled", True)
+                    and not settings.get("telegram_mock_mode", True)
+                    and bool(token)
+                )
+                if not listening:
+                    time.sleep(5)
+                    continue
+
+                offset_raw = db.get_setting(self.OFFSET_SETTING_KEY, "0")
+                try:
+                    offset = int(offset_raw or 0)
+                except (TypeError, ValueError):
+                    offset = 0
+
+                updates = self._poll_updates(token, offset)
+
+                max_update_id = offset - 1
+                for update in updates:
+                    max_update_id = max(max_update_id, update.get("update_id", 0))
+                    try:
+                        self._handle_update(update)
+                    except Exception as exc:
+                        logger.warning("Telegram link listener failed to handle update: %s", exc)
+
+                if updates:
+                    # Acknowledge processed updates so Telegram never resends them.
+                    db.set_setting(self.OFFSET_SETTING_KEY, str(max_update_id + 1))
+
+                if not updates:
+                    # _poll_updates long-polls; reaching here means a clean timeout cycle.
+                    continue
+                time.sleep(self.POLL_INTERVAL_SECONDS)
+            except urllib.error.HTTPError as err:
+                if err.code == 409:
+                    logger.warning(
+                        "Telegram getUpdates conflict (a webhook or another poller is active). Backing off."
+                    )
+                    time.sleep(30)
+                else:
+                    logger.warning("Telegram link listener HTTP error: %s", err)
+                    time.sleep(10)
+            except Exception as exc:
+                logger.debug("Telegram link listener cycle failed: %s", exc)
+                time.sleep(10)
+
+    def _poll_updates(self, token: str, offset: int) -> List[Dict[str, Any]]:
+        params = urllib.parse.urlencode(
+            {
+                "offset": offset,
+                "timeout": self.LONG_POLL_TIMEOUT,
+                "allowed_updates": json.dumps(["message"]),
+            }
+        )
+        url = f"https://api.telegram.org/bot{token}/getUpdates?{params}"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "TapNQue-TelegramBot/2.0",
+                "Accept": "application/json",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=self.LONG_POLL_TIMEOUT + 10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if not data.get("ok"):
+                return []
+            return list(data.get("result", []))
+
+    def _record_recent_user(self, chat: Dict[str, Any]):
+        """Keep a rolling roster (max 10) of bot contacts for one-tap test dispatch."""
+        chat_id = chat.get("id")
+        if not chat_id:
+            return
+        username = (chat.get("username") or "").strip().lstrip("@")
+        first_name = (chat.get("first_name") or "").strip()
+        last_name = (chat.get("last_name") or "").strip()
+        display_parts = [p for p in (first_name, last_name) if p]
+        entry = {
+            "chat_id": str(chat_id),
+            "username": username,
+            "first_name": first_name,
+            "last_name": last_name,
+            "display_name": " ".join(display_parts) if display_parts else (username or f"User {chat_id}"),
+        }
+        try:
+            db = get_database()
+            roster = json.loads(db.get_setting(RECENT_USERS_SETTING_KEY, "[]") or "[]")
+            if not isinstance(roster, list):
+                roster = []
+            roster = [r for r in roster if str(r.get("chat_id")) != entry["chat_id"]]
+            roster.insert(0, entry)
+            db.set_setting(RECENT_USERS_SETTING_KEY, json.dumps(roster[:10]))
+        except Exception as exc:
+            logger.debug("Failed to record recent Telegram user: %s", exc)
+
+    def _handle_update(self, update: Dict[str, Any]):
+        message = update.get("message") or {}
+        text = (message.get("text") or "").strip()
+        chat = message.get("chat") or {}
+        chat_id = chat.get("id")
+        if not chat_id:
+            return
+        self._record_recent_user(chat)
+        if not text:
+            return
+
+        command, _, payload = text.partition(" ")
+        command = command.split("@")[0].lower()  # tolerate '/start@BotName'
+        if command != "/start":
+            return
+
+        chat_id = str(chat_id)
+        db = get_database()
+        settings = db.get_telegram_settings()
+        token = (settings.get("telegram_bot_token", "") or "").strip()
+
+        ticket_number = parse_start_payload(payload)
+        if ticket_number is None:
+            # Bare /start with no QR payload: guide brand-new Telegram users.
+            welcome = (
+                "👋 *Welcome to TapNQue alerts!*\n\n"
+                "To link a queue ticket to this chat, scan the QR code shown on the "
+                "kiosk confirmation screen and tap START again — your ticket will "
+                "connect itself automatically.\n\n"
+                "No ticket yet? Get one at the TapNQue kiosk first."
+            )
+            send_via_telegram_api(chat_id, welcome, token)
+            logger.info("Sent TapNQue welcome guide to chat %s", chat_id)
+            return
+
+        ticket = db.get_ticket(ticket_number)
+        if not ticket:
+            send_via_telegram_api(
+                chat_id,
+                f"⚠️ Ticket *#{ticket_number:04d}* was not found. It may have expired — "
+                f"please take a new ticket at the TapNQue kiosk and scan its QR code.",
+                token,
+            )
+            return
+
+        existing_status = db.get_ticket_telegram_status(ticket_number)
+        already_linked = (
+            ticket.get("telegram_chat_id")
+            and existing_status.get("telegram_ticket_status") in ("sent", "mock_sent")
+        )
+        db.bind_telegram_chat_id(ticket_number, chat_id)
+        logger.info(
+            "Linked Telegram chat %s to ticket #%04d via QR deep-link",
+            chat_id,
+            ticket_number,
+        )
+
+        if already_linked:
+            return  # idempotent: never double-send the confirmation
+
+        linked_ticket = dict(ticket)
+        linked_ticket["telegram_chat_id"] = chat_id
+
+        queue_position = 1
+        for index, queued_ticket in enumerate(db.get_waiting_queue(), start=1):
+            if queued_ticket.get("ticket_number") == ticket_number:
+                queue_position = index
+                break
+
+        sent = send_ticket_created_telegram(linked_ticket, queue_position)
+        if sent:
+            logger.info(
+                "Auto-dispatched ticket-created Telegram alert for #%04d to chat %s",
+                ticket_number,
+                chat_id,
+            )
+
+
+_link_listener = _TelegramLinkListener()
+
+
+def ensure_link_listener():
+    """Start (idempotently) the background QR deep-link auto-link listener."""
+    _link_listener.ensure_started()
 
 
 # ==================== High-Level Public Trigger API ====================

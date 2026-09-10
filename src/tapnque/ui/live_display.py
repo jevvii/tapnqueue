@@ -37,7 +37,8 @@ class LiveDisplay(QWidget):
 
     def _setup_ui(self):
         self.setWindowTitle("Queue Live Display")
-        self.setMinimumSize(1024, 768)
+        # 1024x700 fits 1366x768 Windows laptops even with the taskbar visible.
+        self.setMinimumSize(1024, 700)
         self.setStyleSheet(
             """
             QWidget {

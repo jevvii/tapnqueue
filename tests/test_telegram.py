@@ -10,16 +10,19 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from tapnque.services.telegram_service import (
+    _link_listener,
     clear_mock_telegram_history,
     format_telegram_template,
     generate_telegram_qr_pixmap,
     get_mock_telegram_history,
     get_telegram_bot_link,
+    parse_start_payload,
     send_ticket_called_telegram,
     send_ticket_completed_telegram,
     send_ticket_created_telegram,
     send_via_telegram_api,
     simulate_mock_telegram,
+    validate_telegram_bot_token,
 )
 
 
@@ -138,6 +141,159 @@ class TestTelegramService(unittest.TestCase):
         self.assertTrue(send_ticket_created_telegram(ticket, 2))
         self.assertTrue(send_ticket_called_telegram(ticket, 1))
         self.assertTrue(send_ticket_completed_telegram(ticket))
+
+
+class TestTelegramDeepLinkAutomation(unittest.TestCase):
+    """Tests for the zero-typing QR deep-link auto-link listener and bot validation."""
+
+    def test_parse_start_payload(self):
+        """Deep-link payloads from 'https://t.me/bot?start=ticket_XXXX' resolve to ticket numbers."""
+        self.assertEqual(parse_start_payload("ticket_0042"), 42)
+        self.assertEqual(parse_start_payload("ticket-7"), 7)
+        self.assertEqual(parse_start_payload("TICKET_0001"), 1)
+        self.assertEqual(parse_start_payload("42"), 42)
+        self.assertIsNone(parse_start_payload("hello"))
+        self.assertIsNone(parse_start_payload(""))
+        self.assertIsNone(parse_start_payload(None))
+
+    @patch("urllib.request.urlopen")
+    def test_validate_bot_token_success(self, mock_urlopen):
+        """getMe validation returns the auto-detected bot username."""
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps(
+            {"ok": True, "result": {"id": 1, "is_bot": True, "username": "TapNQueDemoBot"}}
+        ).encode("utf-8")
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        ok, username, err = validate_telegram_bot_token("123:ABC")
+        self.assertTrue(ok)
+        self.assertEqual(username, "TapNQueDemoBot")
+        self.assertIsNone(err)
+        self.assertIn("/bot123:ABC/getMe", mock_urlopen.call_args[0][0].full_url)
+
+    @patch("urllib.request.urlopen")
+    def test_validate_bot_token_invalid(self, mock_urlopen):
+        """401 from Telegram produces a friendly invalid-token error."""
+        import urllib.error
+
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            "https://api.telegram.org", 401, "Unauthorized", None, None
+        )
+        ok, username, err = validate_telegram_bot_token("bad-token")
+        self.assertFalse(ok)
+        self.assertIsNone(username)
+        self.assertIn("Invalid bot token", err)
+
+    def _make_db_and_ticket(self):
+        import tempfile
+        from pathlib import Path
+
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        from tapnque.core.database import DatabaseManager
+
+        db = DatabaseManager(Path(tmp.name) / "listener_test.db")
+        ticket = db.create_ticket(
+            name="Ana Reyes",
+            student_id="2023-00042",
+            email="",
+            phone="",
+            purpose="Enrollment",
+            visitor_type="Student",
+        )
+        return db, ticket
+
+    def test_listener_start_with_ticket_payload_binds_chat(self):
+        """'/start ticket_0007' binds the chat to the ticket and dispatches confirmation."""
+        db, ticket = self._make_db_and_ticket()
+        with patch("tapnque.services.telegram_service.get_database", return_value=db), patch(
+            "tapnque.services.telegram_service.send_ticket_created_telegram", return_value=True
+        ) as mock_send, patch(
+            "tapnque.services.telegram_service.send_via_telegram_api", return_value=(True, "sent", None)
+        ):
+            _link_listener._handle_update(
+                {
+                    "update_id": 10,
+                    "message": {
+                        "text": f"/start ticket_{ticket['ticket_number']:04d}",
+                        "chat": {"id": 555777, "first_name": "Ana"},
+                    },
+                }
+            )
+
+        stored = db.get_ticket_telegram_status(ticket["ticket_number"])
+        self.assertEqual(stored["telegram_chat_id"], "555777")
+        self.assertEqual(mock_send.call_count, 1)
+
+    def test_listener_bare_start_sends_welcome(self):
+        """A bare /start gets the onboarding guide; nothing is bound."""
+        db, ticket = self._make_db_and_ticket()
+        with patch("tapnque.services.telegram_service.get_database", return_value=db), patch(
+            "tapnque.services.telegram_service.send_ticket_created_telegram", return_value=True
+        ) as mock_send, patch(
+            "tapnque.services.telegram_service.send_via_telegram_api", return_value=(True, "sent", None)
+        ) as mock_api:
+            _link_listener._handle_update(
+                {
+                    "update_id": 11,
+                    "message": {"text": "/start", "chat": {"id": 888, "first_name": "New"}},
+                }
+            )
+
+        stored = db.get_ticket_telegram_status(ticket["ticket_number"])
+        self.assertIsNone(stored["telegram_chat_id"])
+        self.assertEqual(mock_send.call_count, 0)
+        self.assertEqual(mock_api.call_count, 1)
+        self.assertIn("Welcome", mock_api.call_args[0][1])
+
+    def test_recent_users_roster_survives_api_outage(self):
+        """Contacts captured by the listener are served from cache when getUpdates fails."""
+        from tapnque.services.telegram_service import fetch_recent_telegram_users
+
+        db, ticket = self._make_db_and_ticket()
+        with patch("tapnque.services.telegram_service.get_database", return_value=db), patch(
+            "tapnque.services.telegram_service.send_via_telegram_api", return_value=(True, "sent", None)
+        ):
+            _link_listener._handle_update(
+                {
+                    "update_id": 20,
+                    "message": {
+                        "text": "/start",
+                        "chat": {"id": 424242, "first_name": "Ria", "username": "riatest"},
+                    },
+                }
+            )
+
+        with patch("tapnque.services.telegram_service.get_database", return_value=db), patch(
+            "urllib.request.urlopen", side_effect=OSError("no internet")
+        ):
+            users = fetch_recent_telegram_users("fake-token")
+
+        self.assertEqual(len(users), 1)
+        self.assertEqual(users[0]["chat_id"], "424242")
+        self.assertEqual(users[0]["username"], "riatest")
+
+    def test_listener_repeat_start_is_idempotent(self):
+        """Scanning twice never double-sends the confirmation alert."""
+        db, ticket = self._make_db_and_ticket()
+        update = {
+            "update_id": 12,
+            "message": {
+                "text": f"/start ticket_{ticket['ticket_number']:04d}",
+                "chat": {"id": 555777},
+            },
+        }
+        with patch("tapnque.services.telegram_service.get_database", return_value=db), patch(
+            "tapnque.services.telegram_service.send_ticket_created_telegram", return_value=True
+        ) as mock_send, patch(
+            "tapnque.services.telegram_service.send_via_telegram_api", return_value=(True, "sent", None)
+        ):
+            _link_listener._handle_update(dict(update))
+            db.update_ticket_telegram_status(ticket["ticket_number"], "created", "sent")
+            _link_listener._handle_update(dict(update, update_id=13))
+
+        self.assertEqual(mock_send.call_count, 1)
 
 
 if __name__ == "__main__":

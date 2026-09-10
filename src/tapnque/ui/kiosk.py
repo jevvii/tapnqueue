@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPixmap
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QLinearGradient, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -26,7 +26,10 @@ from tapnque.config import get_asset_path
 from tapnque.core.database import get_database
 from tapnque.services.email_service import is_email_configured, send_ticket_email
 from tapnque.services.sms_service import sanitize_ph_phone_number, send_ticket_created_sms
-from tapnque.services.telegram_service import send_ticket_created_telegram
+from tapnque.services.telegram_service import (
+    ensure_link_listener,
+    is_telegram_qr_available,
+)
 from tapnque.ui.components.animations import AnimatedLoadingBar, AnimatedSpinner
 from tapnque.ui.components.dialogs import TicketCreatedDialog
 from tapnque.ui.components.keyboard import TouchKeyboardWidget
@@ -254,11 +257,42 @@ class StudentKiosk(QWidget):
         self.settings_timer.timeout.connect(self._refresh_phone_field_setting)
         self.settings_timer.start(5000)
 
+    def _is_compact_screen(self) -> bool:
+        """True on vertically short displays (1366x768 laptops, 125%+ Windows scaling)."""
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            return False
+        return screen.availableGeometry().height() < 900
+
     def _setup_ui(self):
         self.setWindowTitle("Student Kiosk - Get Your Ticket")
-        self.setMinimumSize(1280, 820)
-        self.setStyleSheet(
-            """
+
+        compact = self._is_compact_screen()
+        self._compact = compact
+        if compact:
+            self.setMinimumSize(1024, 700)
+        else:
+            self.setMinimumSize(1280, 820)
+
+        # Compact metrics keep every label/field separated on short screens
+        # (Windows 1366x768 and scaled displays); metrics tokens below are
+        # substituted into the stylesheet so both modes share one template.
+        m = {
+            "card_margins": "44px, 26px, 44px, 22px" if compact else "76px, 56px, 76px, 48px",
+            "card_spacing": "14" if compact else "26",
+            "title_size": "30px" if compact else "42px",
+            "subtitle_size": "15px" if compact else "17px",
+            "field_padding": "10px 14px" if compact else "16px 18px",
+            "field_min_height": "28px" if compact else "34px",
+            "grid_vspacing": "10" if compact else "18",
+            "submit_padding": "14px" if compact else "22px",
+            "submit_size": "18px" if compact else "22px",
+            "info_margins": "18px, 12px, 18px, 12px" if compact else "26px, 24px, 26px, 24px",
+            "title_spacing": "6" if compact else "12",
+            "submit_spacing": "12" if compact else "22",
+        }
+
+        stylesheet = """
             StudentKiosk {
                 background: #dfe6df;
             }
@@ -267,7 +301,7 @@ class StudentKiosk(QWidget):
             }
             QLabel, QPushButton, QLineEdit, QComboBox {
                 color: #203126;
-                font-family: "Segoe UI";
+                font-family: "Segoe UI", "Noto Sans", "DejaVu Sans", sans-serif;
             }
             QFrame#topBar {
                 background: rgba(247, 250, 247, 232);
@@ -323,12 +357,12 @@ class StudentKiosk(QWidget):
             }
             QLabel#cardTitle {
                 color: #18241b;
-                font-size: 42px;
+                font-size: @TITLE_SIZE@;
                 font-weight: 800;
             }
             QLabel#cardSubtitle {
                 color: #55665a;
-                font-size: 17px;
+                font-size: @SUBTITLE_SIZE@;
             }
             QLabel#fieldLabel {
                 color: #33483a;
@@ -340,9 +374,9 @@ class StudentKiosk(QWidget):
                 color: #172019;
                 border: 2px solid #edf2ee;
                 border-radius: 16px;
-                padding: 16px 18px;
+                padding: @FIELD_PADDING@;
                 font-size: 14px;
-                min-height: 34px;
+                min-height: @FIELD_MIN_HEIGHT@;
             }
             QLineEdit:focus, QComboBox:focus {
                 border: 2px solid #0b9b4a;
@@ -377,8 +411,8 @@ class StudentKiosk(QWidget):
                 color: white;
                 border: none;
                 border-radius: 18px;
-                padding: 22px;
-                font-size: 22px;
+                padding: @SUBMIT_PADDING@;
+                font-size: @SUBMIT_SIZE@;
                 font-weight: 800;
             }
             QPushButton#submitButton:hover {
@@ -443,7 +477,15 @@ class StudentKiosk(QWidget):
                 background: #3a4659;
             }
             """
+        stylesheet = (
+            stylesheet.replace("@TITLE_SIZE@", m["title_size"])
+            .replace("@SUBTITLE_SIZE@", m["subtitle_size"])
+            .replace("@FIELD_PADDING@", m["field_padding"])
+            .replace("@FIELD_MIN_HEIGHT@", m["field_min_height"])
+            .replace("@SUBMIT_PADDING@", m["submit_padding"])
+            .replace("@SUBMIT_SIZE@", m["submit_size"])
         )
+        self.setStyleSheet(stylesheet)
 
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
@@ -513,8 +555,9 @@ class StudentKiosk(QWidget):
         card = QFrame()
         card.setObjectName("card")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(76, 56, 76, 48)
-        card_layout.setSpacing(26)
+        card_margins = (44, 26, 44, 22) if compact else (76, 56, 76, 48)
+        card_layout.setContentsMargins(*card_margins)
+        card_layout.setSpacing(int(m["card_spacing"]))
 
         title = QLabel("Queue Registration")
         title.setObjectName("cardTitle")
@@ -526,11 +569,11 @@ class StudentKiosk(QWidget):
         subtitle.setAlignment(Qt.AlignCenter)
         card_layout.addWidget(subtitle)
 
-        card_layout.addSpacing(12)
+        card_layout.addSpacing(int(m["title_spacing"]))
 
         form_grid = QGridLayout()
         form_grid.setHorizontalSpacing(36)
-        form_grid.setVerticalSpacing(18)
+        form_grid.setVerticalSpacing(int(m["grid_vspacing"]))
 
         name_label = QLabel("STUDENT NAME")
         name_label.setObjectName("fieldLabel")
@@ -558,11 +601,6 @@ class StudentKiosk(QWidget):
         self.visitor_combo = QComboBox()
         self.visitor_combo.addItems(["Student", "Parent", "Guardian", "PWD"])
 
-        telegram_label = QLabel("TELEGRAM USERNAME / CHAT ID (OPTIONAL)")
-        telegram_label.setObjectName("fieldLabel")
-        self.telegram_input = QLineEdit()
-        self.telegram_input.setPlaceholderText("e.g. @username or Chat ID")
-
         purpose_label = QLabel("PURPOSE OF VISIT")
         purpose_label.setObjectName("fieldLabel")
         self.purpose_combo = QComboBox()
@@ -587,15 +625,13 @@ class StudentKiosk(QWidget):
         form_grid.addWidget(self.email_input, 3, 0)
         form_grid.addWidget(self.phone_input, 3, 1)
         form_grid.addWidget(visitor_label, 4, 0)
-        form_grid.addWidget(telegram_label, 4, 1)
         form_grid.addWidget(self.visitor_combo, 5, 0)
-        form_grid.addWidget(self.telegram_input, 5, 1)
         form_grid.addWidget(purpose_label, 6, 0, 1, 2)
         form_grid.addWidget(self.purpose_combo, 7, 0, 1, 2)
         self._apply_phone_field_visibility()
 
         card_layout.addLayout(form_grid)
-        card_layout.addSpacing(22)
+        card_layout.addSpacing(int(m["submit_spacing"]))
 
         self.submit_btn = QPushButton("GET TICKET")
         self.submit_btn.setObjectName("submitButton")
@@ -606,7 +642,8 @@ class StudentKiosk(QWidget):
         info_box = QFrame()
         info_box.setObjectName("infoBox")
         info_layout = QHBoxLayout(info_box)
-        info_layout.setContentsMargins(26, 24, 26, 24)
+        info_margins = (18, 12, 18, 12) if compact else (26, 24, 26, 24)
+        info_layout.setContentsMargins(*info_margins)
         info_layout.setSpacing(16)
 
         info_icon = QLabel("i")
@@ -615,10 +652,11 @@ class StudentKiosk(QWidget):
         info_icon.setFixedWidth(22)
         info_layout.addWidget(info_icon, 0, Qt.AlignTop)
 
-        info_text = QLabel("Your digital ticket will be displayed immediately upon submission.")
-        info_text.setObjectName("infoText")
-        info_text.setWordWrap(True)
-        info_layout.addWidget(info_text)
+        self.info_text = QLabel()
+        self.info_text.setObjectName("infoText")
+        self.info_text.setWordWrap(True)
+        self._refresh_info_text()
+        info_layout.addWidget(self.info_text)
 
         card_layout.addWidget(info_box)
         body_layout.addWidget(card, 1)
@@ -630,7 +668,6 @@ class StudentKiosk(QWidget):
             (self.id_input, "numeric"),
             (self.email_input, "alpha"),
             (self.phone_input, "numeric"),
-            (self.telegram_input, "alpha"),
         ):
             field.setProperty("keyboard_type", keyboard_type)
             field.installEventFilter(self)
@@ -681,13 +718,21 @@ class StudentKiosk(QWidget):
             if hasattr(self, "keyboard") and self.keyboard.target_input is self.phone_input:
                 self.keyboard.hide()
 
+    def _refresh_info_text(self):
+        base = "Your digital ticket will be displayed immediately upon submission."
+        if is_telegram_qr_available():
+            base += (
+                " Want free phone alerts? Simply scan the QR code shown after "
+                "submitting — Telegram links itself automatically, no typing needed."
+            )
+        self.info_text.setText(base)
+
     def _refresh_phone_field_setting(self):
         enabled = self.db.get_cached_app_settings().get("phone_number_enabled", True)
-        if enabled == self.phone_number_enabled:
-            return
-
-        self.phone_number_enabled = enabled
-        self._apply_phone_field_visibility()
+        if enabled != self.phone_number_enabled:
+            self.phone_number_enabled = enabled
+            self._apply_phone_field_visibility()
+        self._refresh_info_text()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -757,7 +802,7 @@ class StudentKiosk(QWidget):
                 )
                 return
 
-        telegram_chat = self.telegram_input.text().strip()
+        telegram_offered = is_telegram_qr_available()
 
         try:
             ticket = self.db.create_ticket(
@@ -768,7 +813,6 @@ class StudentKiosk(QWidget):
                 purpose=purpose,
                 visitor_type=visitor_type,
                 phone_formatted=phone_formatted,
-                telegram_chat_id=telegram_chat,
             )
             queue_position = 1
             waiting_queue = self.db.get_waiting_queue()
@@ -794,9 +838,10 @@ class StudentKiosk(QWidget):
             if phone_formatted:
                 sms_sent = send_ticket_created_sms(ticket, queue_position)
 
-            telegram_sent = False
-            if telegram_chat:
-                telegram_sent = send_ticket_created_telegram(ticket, queue_position)
+            if telegram_offered:
+                # Arm the background listener so a scanned QR + START tap
+                # auto-links the student and dispatches their confirmation.
+                ensure_link_listener()
 
             self.keyboard.hide()
             confirmation = TicketCreatedDialog(
@@ -805,10 +850,10 @@ class StudentKiosk(QWidget):
                 purpose=purpose,
                 email_sent=email_sent,
                 sms_sent=sms_sent,
-                telegram_sent=telegram_sent,
+                telegram_sent=False,
+                telegram_offered=telegram_offered,
                 parent=self,
             )
-            confirmation.resize(960, 660)
             confirmation.exec()
             self._clear_form()
         except Exception as e:
@@ -819,7 +864,6 @@ class StudentKiosk(QWidget):
         self.id_input.clear()
         self.email_input.clear()
         self.phone_input.clear()
-        self.telegram_input.clear()
         self.visitor_combo.setCurrentIndex(0)
         self.purpose_combo.setCurrentIndex(0)
         self.keyboard.hide()

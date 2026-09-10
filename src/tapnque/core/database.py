@@ -620,6 +620,23 @@ class DatabaseManager:
         """Cached/fast settings retrieval."""
         return self.get_app_settings()
 
+    # ==================== Generic Settings ====================
+
+    def get_setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """Read a single raw value from the settings key-value table."""
+        with self._connect() as conn:
+            row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+            return row["value"] if row else default
+
+    def set_setting(self, key: str, value: Any):
+        """Persist a single raw value into the settings key-value table."""
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, str(value)),
+            )
+
     def set_phone_number_enabled(self, enabled: bool):
         """Toggle kiosk phone number field visibility."""
         with self._connect() as conn:
@@ -862,6 +879,20 @@ class DatabaseManager:
                     event_type,
                     status,
                 )
+
+    def bind_telegram_chat_id(self, ticket_number: int, chat_id: str) -> bool:
+        """Link a Telegram chat ID (from a scanned QR deep-link /start) to a ticket.
+
+        Returns True when the ticket exists and was linked.
+        """
+        if not chat_id:
+            return False
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE tickets SET telegram_chat_id = ? WHERE ticket_number = ?",
+                (str(chat_id).strip(), ticket_number),
+            )
+            return cursor.rowcount > 0
 
     def get_ticket_telegram_status(self, ticket_number: int) -> Dict[str, Any]:
         """Retrieve Telegram delivery status flags for a ticket."""

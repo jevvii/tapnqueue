@@ -44,6 +44,7 @@ from tapnque.services.sms_service import (
 )
 from tapnque.services.telegram_service import (
     clear_mock_telegram_history,
+    ensure_link_listener,
     fetch_recent_telegram_users,
     format_telegram_template,
     generate_telegram_qr_pixmap,
@@ -52,6 +53,7 @@ from tapnque.services.telegram_service import (
     resolve_telegram_chat_id,
     send_via_telegram_api,
     simulate_mock_telegram,
+    validate_telegram_bot_token,
 )
 from tapnque.ui.components.dialogs import SMSLogDialog, TelegramLogDialog
 
@@ -774,7 +776,9 @@ class SuperAdmin(QWidget):
         user_lbl = QLabel("Telegram Bot Username:")
         user_lbl.setStyleSheet("font-weight: 600; font-size: 13px;")
         self.tg_username_input = QLineEdit()
-        self.tg_username_input.setPlaceholderText("e.g. TapNQueBot")
+        self.tg_username_input.setPlaceholderText(
+            "Auto-detected from your token when you SAVE in Live Mode (no typing needed)"
+        )
         self.tg_username_input.textChanged.connect(self._update_telegram_qr_preview)
         tg_inputs_col.addWidget(user_lbl)
         tg_inputs_col.addWidget(self.tg_username_input)
@@ -1176,10 +1180,21 @@ class SuperAdmin(QWidget):
         self._update_telegram_qr_preview()
 
     def _update_telegram_qr_preview(self):
-        username = self.tg_username_input.text().strip().lstrip("@") or "TapNQueBot"
+        username = self.tg_username_input.text().strip().lstrip("@")
+        if not username:
+            self.tg_qr_preview_label.clear()
+            self.tg_qr_preview_label.setText(
+                "No bot configured yet.\nSave a valid Bot Token in Live Mode —\n"
+                "the username and this QR then fill in automatically."
+            )
+            self.tg_qr_preview_label.setWordWrap(True)
+            self.tg_qr_preview_label.setStyleSheet("color: #5f6368; font-size: 12px;")
+            self.tg_qr_link_label.setText("")
+            return
+        self.tg_qr_preview_label.setStyleSheet("")
         bot_url = f"https://t.me/{username}"
         pixmap = generate_telegram_qr_pixmap(bot_url, size=110)
-        if pixmap:
+        if pixmap and not pixmap.isNull():
             self.tg_qr_preview_label.setPixmap(pixmap)
         self.tg_qr_link_label.setText(f"@{username}\n{bot_url}")
 
@@ -1221,6 +1236,22 @@ class SuperAdmin(QWidget):
         called_tmpl = self.tg_called_tmpl_input.text().strip()
         completed_tmpl = self.tg_completed_tmpl_input.text().strip()
 
+        tg = self.db.get_telegram_settings()
+        wants_live = tg.get("telegram_enabled", True) and not tg.get("telegram_mock_mode", True)
+
+        detected_username = None
+        validation_error = None
+        if token and wants_live:
+            # One-tap setup: validate the token and auto-detect the bot username
+            # so the admin never has to find or type it manually.
+            ok, detected_username, validation_error = validate_telegram_bot_token(token)
+            if ok and detected_username:
+                if detected_username.lower() != username.lower():
+                    username = detected_username
+                validation_error = None
+            elif not ok:
+                detected_username = None
+
         self.db.save_telegram_settings(
             bot_token=token,
             bot_username=username,
@@ -1229,17 +1260,41 @@ class SuperAdmin(QWidget):
             template_completed=completed_tmpl,
         )
         self._update_telegram_ui()
-        QMessageBox.information(
-            self,
-            "Settings Saved",
-            "Telegram Bot configuration and message templates have been successfully updated.",
-        )
+
+        if wants_live and token:
+            ensure_link_listener()
+
+        if detected_username:
+            QMessageBox.information(
+                self,
+                "Connected — Setup Complete",
+                f"✅ Connected to Telegram as @{detected_username}.\n\n"
+                f"Everything is now automatic:\n"
+                f"• The kiosk QR code encodes your bot's link\n"
+                f"• Students scan it and tap START — no typing\n"
+                f"• Their ticket links itself and alerts begin flowing\n\n"
+                f"Use TEST TELEGRAM DISPATCH to verify end-to-end delivery.",
+            )
+        elif token and wants_live and validation_error:
+            QMessageBox.warning(
+                self,
+                "Settings Saved — Token Check Failed",
+                f"Configuration was saved, but the bot token could not be verified:\n\n"
+                f"{validation_error}\n\n"
+                f"QR scanning and live alerts will not work until a valid token is saved.",
+            )
+        else:
+            QMessageBox.information(
+                self,
+                "Settings Saved",
+                "Telegram Bot configuration and message templates have been successfully updated.",
+            )
 
     def _test_telegram_dispatch(self):
         tg = self.db.get_telegram_settings()
         is_mock = tg.get("telegram_mock_mode", True)
         bot_token = tg.get("telegram_bot_token", "").strip()
-        bot_username = tg.get("telegram_bot_username", "OlfuTapNQue_bot").strip().lstrip("@")
+        bot_username = (tg.get("telegram_bot_username", "") or "").strip().lstrip("@") or "your TapNQue bot"
 
         recent_users = fetch_recent_telegram_users(bot_token) if bot_token else []
 
@@ -1259,7 +1314,8 @@ class SuperAdmin(QWidget):
             default_text = ""
             prompt_desc = (
                 f"Enter recipient Telegram Chat ID:\n\n"
-                f"ℹ️ Ensure the recipient has opened @{bot_username} in Telegram and tapped START.\n\n"
+                f"ℹ️ Ensure the recipient has opened {bot_username if bot_username.startswith('your') else '@' + bot_username} "
+                f"in Telegram and tapped START.\n\n"
                 f"Enter your numeric Chat ID (obtain it via @userinfobot)\n"
                 f"or your @username (if you already tapped START):"
             )
