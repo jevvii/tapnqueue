@@ -1,5 +1,5 @@
 # TapNQue Student Queue Management System
-## Comprehensive System Architecture, Administrative Authentication Guide, PhilSMS Cloud API Operations Manual, and Hands-On Simulation Walkthrough
+## Comprehensive System Architecture, Administrative Authentication Guide, PhilSMS Cloud API Operations Manual, and Hands-On Live Testing Walkthrough
 
 **Document ID:** TNQ-DOC-MAN-2026-03-PHILSMS  
 **Release Version:** Version 2.2.0-PROD (PhilSMS Cloud REST API Integrated)  
@@ -201,41 +201,43 @@ TAPNQUE_SMS_ENABLED=1
 
 ---
 
-## 6. Step-by-Step Hands-On PhilSMS Simulation Walkthrough
+## 6. Step-by-Step Hands-On PhilSMS Live Testing Walkthrough
 
-To ensure panelists, evaluators, and system administrators can thoroughly verify the end-to-end PhilSMS notification lifecycle without spending prepaid SMS credits or requiring active internet connectivity, execute the following structured hands-on walkthrough:
+This section provides a complete, hands-on testing walkthrough using the actual PhilSMS cloud gateway to verify real-world cellular delivery to physical Philippine smartphones across the entire queue lifecycle:
 
-### Phase 1: Verify Super Admin Settings & On-Demand Test Dispatch
+### Phase 1: Configure Super Admin for Live PhilSMS Dispatches & Test Dispatch
 1. Launch the Super Admin Console in a terminal:
    ```bash
    python run_admin.py
    ```
-   Log in using default credentials (Username: `admin`, Password: `admin123`).
-2. Navigate to the **Settings** tab and scroll to the **SMS Gateway & Capstone Simulation** section.
-3. Confirm that the mode status badge displays:
-   `● MOCK MODE ACTIVE (Safe Capstone Simulation — Local Logging Only, Zero Credit Cost)`
-4. Click the **TEST DISPATCH (LIVE / MOCK)** button to launch the test dispatch modal.
-5. Enter test recipient phone number: `09171234567`, and click **SEND TEST MESSAGE**.
-6. Confirm the success notification prompt appears. Click **VIEW MOCK SMS LOGS** to inspect the `SMSLogDialog` audit table containing the recorded test entry with timestamp, recipient, and message text.
+   Log in using administrative credentials (Username: `admin`, Password: `admin123`).
+2. Navigate to the **Settings** tab and locate the **SMS Gateway & Capstone Simulation** section.
+3. Ensure your active PhilSMS secret Bearer Token is entered into the **PhilSMS API Token / Bearer Key** field, and Sender ID is set to `PhilSMS`.
+4. Click **SWITCH TO LIVE GATEWAY**. Confirm that the status badge changes to green:
+   `● LIVE GATEWAY ACTIVE (PhilSMS Cloud REST API Dispatches)`
+5. Click **SAVE SMS CONFIGURATION** to commit the live mode setting into the SQLite database.
+6. Click **TEST DISPATCH (LIVE / MOCK)** to open the interactive test modal.
+7. Enter an active Philippine smartphone number (e.g., `09171234567`) and click **SEND TEST MESSAGE**.
+8. Observe the physical smartphone handset: within 3 to 15 seconds, a real carrier SMS arrives from sender `PhilSMS`. Confirm that the station terminal outputs an HTTP 200 OK delivery acknowledgment.
 
-### Phase 2: Generate Ticket on Student Kiosk (Trigger 1: CREATED)
-1. In a separate terminal window, start the Student Registration Kiosk:
+### Phase 2: Generate Live Ticket on Student Kiosk (Trigger 1: CREATED)
+1. In a separate terminal window, launch the Student Registration Kiosk:
    ```bash
    python run_kiosk.py
    ```
-2. On the touchscreen check-in form, enter the following demonstration student profile:
+2. On the touchscreen check-in form, enter student credentials using an active Philippine mobile number to receive live alerts:
    - **Student Full Name:** `Juan Dela Cruz`
    - **Student Identification Number:** `2023-10042`
-   - **Philippine Mobile Number:** `0917 987 6543`
+   - **Philippine Mobile Number:** `0917 987 6543` *(use your active mobile phone number)*
    - **Visitor Classification:** `Student`
    - **Purpose of Visit:** `Enrollment`
 3. Click the prominent green **GET TICKET** button.
-4. The `TicketCreatedDialog` modal appears on screen displaying Ticket Number `#0001`, Queue Line Position: `1`, and the confirmation status pill reading `SMS dispatched successfully`. The modal auto-resets after 8 seconds.
-5. Switch to the Kiosk terminal console to observe the asynchronous daemon log output:
+4. The `TicketCreatedDialog` modal appears displaying Ticket Number `#0001`, Queue Position `1`, and the status pill `SMS dispatched successfully`. The dialog auto-resets after 8 seconds.
+5. Within 3 to 10 seconds, the student's physical smartphone receives the live SMS from sender `PhilSMS`:
    ```text
-   📱 [MOCK SMS SIMULATION] To: 09179876543 | Event: CREATED | Ticket: #0001
-      "Hello Juan Dela Cruz! Ticket #0001 confirmed. Pos: 1. Reason: Enrollment. Watch the display monitor! - TapNQue"
+   "Hello Juan Dela Cruz! Ticket #0001 confirmed. Pos: 1. Reason: Enrollment. Watch the display monitor! - TapNQue"
    ```
+6. Observe the Kiosk terminal console: the asynchronous daemon logs the live dispatch and records an HTTP 200 OK response from `https://app.philsms.com/api/v3/sms/send`.
 
 ### Phase 3: Service Ticket at Staff Service Desk (Trigger 2: CALLED & Trigger 3: COMPLETED)
 1. In a third terminal window, launch the Staff Admin interface:
@@ -243,35 +245,33 @@ To ensure panelists, evaluators, and system administrators can thoroughly verify
    python run_staff.py
    ```
    Log in using credentials (Username: `staff`, Password: `staff123`).
-2. Ensure Counter selector is set to **Counter 1**. Observe Ticket `#0001` (`Juan Dela Cruz`) seated at the head of the priority-sorted waiting queue table.
+2. Ensure Counter selector is set to **Counter 1**. Observe Ticket `#0001` (`Juan Dela Cruz`) seated at the head of the waiting queue.
 3. Click **CALL NEXT** (Trigger 2):
-   - The Active Serving Card illuminates with Ticket `#0001` assigned to Counter 1.
-   - The lobby TV display pulses an acoustic chime and animated border flash.
-   - The terminal console outputs the outbound alert:
+   - Active Serving Card illuminates with Ticket `#0001` assigned to Counter 1.
+   - Lobby TV monitor triggers acoustic chimes and visual flashing borders.
+   - Within seconds, the student's physical mobile phone vibrates with the live call alert:
      ```text
-     📱 [MOCK SMS SIMULATION] To: 09179876543 | Event: CALLED | Ticket: #0001
-        "NOW SERVING: Ticket #0001 (Juan Dela Cruz)! Please proceed to Counter 1 immediately. - TapNQue"
+     "NOW SERVING: Ticket #0001 (Juan Dela Cruz)! Please proceed to Counter 1 immediately. - TapNQue"
      ```
-4. *(Optional Recall Verification)*: Click the **RECALL** button. Confirm that the lobby display re-triggers call animations and a renewed SMS alert is output to the terminal console.
+4. *(Optional Recall Verification)*: Click the **RECALL** button. Confirm that the lobby display pulses call animations and a renewed live SMS alert arrives on the student's phone.
 5. Click **MARK DONE** (Trigger 3):
-   - The transaction is finalized, wait time is logged, and the ticket moves to service history.
-   - The terminal console outputs the final completion notification:
+   - Transaction is finalized, wait duration is logged in telemetry, and the ticket moves to history.
+   - The student's mobile handset receives the final live completion text message:
      ```text
-     📱 [MOCK SMS SIMULATION] To: 09179876543 | Event: COMPLETED | Ticket: #0001
-        "Ticket #0001 marked as completed. Thank you for visiting TapNQue!"
+     "Ticket #0001 marked as completed. Thank you for visiting TapNQue!"
      ```
 
-### Phase 4: Verify Audit Trail & Database Records in SQLite
-1. Return to the Super Admin window > **Settings** tab > click **VIEW MOCK SMS LOGS**.
-2. Review the session audit log table. Confirm all three transaction events (CREATED, CALLED, COMPLETED) are chronologically documented with exact timestamps, formatted mobile numbers, and complete message bodies.
-3. Query the local SQLite database from a terminal to verify thread-safe state persistence:
+### Phase 4: Verify Live Delivery Records & SQLite Persistence
+1. Query the local SQLite database from a terminal to verify that all three triggers recorded live `'sent'` status:
    ```bash
    python -c "import sqlite3; conn = sqlite3.connect('data/kiosk.db'); print(conn.execute('SELECT ticket_number, phone_formatted, sms_status_created, sms_status_called, sms_status_completed FROM tickets WHERE ticket_number=1').fetchone())"
    ```
-4. Confirm terminal query output returns:
+2. Confirm terminal query output returns:
    ```text
-   (1, '09179876543', 'mock_sent', 'mock_sent', 'mock_sent')
+   (1, '09179876543', 'sent', 'sent', 'sent')
    ```
+   *(Note: in live mode, status values transition to `'sent'` upon gateway HTTP 200 confirmation, verifying live cloud dispatch).*
+3. Log in to the PhilSMS Web Portal at `https://app.philsms.com/login` and navigate to **Outbox / SMS History** to review carrier timestamps, telco routing networks (Smart/Globe/Dito), and deducted balance.
 
 ---
 

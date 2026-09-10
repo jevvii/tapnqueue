@@ -2,10 +2,11 @@
 ## Architectural Overhaul, API V3 JSON Specification, and Database Migration Guide
 
 **Document ID:** TNQ-MIG-SMS-2026-01  
-**System Version:** Version 2.1.0-PROD (PhilSMS Integrated)  
+**System Version:** Version 2.2.0-PROD (PhilSMS Integrated)  
 **Migration Date:** 11-09-2026 (September 11, 2026)  
 **Target Platform:** Python 3.10+ / PySide6 (Qt6) / SQLite 3 (WAL Mode)  
-**Status:** ✅ **100% Complete, Verified & Passing 22/22 Unit Tests**  
+**Status:** ✅ **100% Complete, Verified & Passing 24/24 Unit Tests**  
+**Post-Audit Note (11-09-2026):** Following the independent migration audit (TNQ-AUD-MIG-2026-01), three hardening fixes were applied: JSON response-body status parsing, `63`-format recipient conversion at the gateway boundary, and wiring of the `sms_gateway_url` setting into the dispatch path. This document has been updated to match the corrected code.
 
 ---
 
@@ -55,12 +56,14 @@ Content-Type: application/json
 Accept: application/json
 
 {
-  "recipient": "09171234567",
+  "recipient": "639171234567",
   "sender_id": "PhilSMS",
   "type": "plain",
   "message": "Ticket #0001 confirmed"
 }
 ```
+
+> **Recipient format:** Internally, TapNQue stores and displays numbers in local `09XXXXXXXXX` form; `to_gateway_recipient()` converts to the `63XXXXXXXXX` form shown above (and in all official PhilSMS examples) at the moment of dispatch.
 
 ---
 
@@ -76,11 +79,13 @@ The migration touched configuration, the service tier, database schema defaults,
 * Refactored `send_via_gateway()`:
   - Enforces `Authorization: Bearer <api_key>` header.
   - Formats data using `json.dumps({"recipient": phone, "sender_id": sender_id, "type": "plain", "message": message})`.
-  - Parses JSON response status and extracts delivery diagnostics.
+  - Converts recipients to the official international format at the gateway boundary via `to_gateway_recipient()` — internally stored `09XXXXXXXXX` numbers are sent to PhilSMS as `639XXXXXXXXX`, matching the documented request examples exactly.
+  - Parses the JSON response body and trusts the payload, not just the HTTP code: a dispatch is only recorded as `sent` when the body reports `"status": "success"` (or carries no status field at all). Gateway-level rejections returned with HTTP 200 — e.g. `{"status": "error", "message": "Insufficient SMS balance."}` — are recorded as `failed`, with the gateway's message captured in the ticket's `sms_last_error` column.
 
 ### 3.3 [`src/tapnque/core/database.py`](file:///home/javvii/FreelanceProject/Project6/src/tapnque/core/database.py)
-* Added `sms_gateway_url` to `default_settings` in `_initialize_db()`.
+* Added `sms_gateway_url` to `default_settings` in `_initialize_db()` (seeded from the `TAPNQUE_SMS_GATEWAY_URL` env override when present).
 * Ensured `get_sms_settings()` reads and returns `sms_gateway_url`.
+* The background dispatch worker now passes the configured `sms_gateway_url` into `send_via_gateway(gateway_url=...)`, so the stored setting is live and authoritative after database seeding, consistent with the other SMS settings.
 
 ### 3.4 [`src/tapnque/ui/super_admin.py`](file:///home/javvii/FreelanceProject/Project6/src/tapnque/ui/super_admin.py)
 * Updated group box header and descriptive subtitle to reference PhilSMS.
@@ -88,6 +93,7 @@ The migration touched configuration, the service tier, database schema defaults,
 * Updated input placeholder: `Paste PhilSMS API Token (Optional in Mock Mode)`.
 * Updated live status badge: `● LIVE GATEWAY ACTIVE (PhilSMS Cloud REST API Dispatches)`.
 * Updated warning dialog on missing token when switching to live mode.
+* Added client-side Sender ID validation on save: alphanumeric only, maximum 11 characters (enforced via input `maxLength` plus a save-time check that rejects spaces/symbols with an explanatory dialog). Custom Sender IDs must additionally be registered and carrier-approved in the PhilSMS dashboard; otherwise the pre-approved default `PhilSMS` should be used.
 
 ### 3.5 [`.env.example`](file:///home/javvii/FreelanceProject/Project6/.env.example)
 * Documented `TAPNQUE_SMS_GATEWAY_URL=https://app.philsms.com/api/v3/sms/send`.
@@ -122,7 +128,7 @@ TAPNQUE_SMS_SENDER_NAME=PhilSMS
 1. Launch Super Admin: `python run_admin.py` (Login: `admin` / `admin123`).
 2. Go to the **Settings** tab and scroll to **SMS Gateway & Capstone Simulation**.
 3. Paste your PhilSMS token into **PhilSMS API Token / Bearer Key**.
-4. Set Sender ID to `PhilSMS` (or your verified institutional sender ID).
+4. Set Sender ID to `PhilSMS` (or your carrier-approved institutional sender ID — alphanumeric, max 11 characters; the input field enforces this on save).
 5. Click **SWITCH TO LIVE GATEWAY**.
 6. Click **SAVE SMS CONFIGURATION**.
 7. Click **TEST DISPATCH** with a mobile number to verify live delivery!
@@ -131,9 +137,11 @@ TAPNQUE_SMS_SENDER_NAME=PhilSMS
 
 ## 5. Verification & Testing Sign-Off
 
-The entire test suite was executed post-migration:
+The entire test suite was executed post-migration (including the new gateway response-parsing and recipient-format tests added during audit remediation):
 ```text
 pytest -v
-==================== 22 passed, 18 subtests passed in 0.64s ====================
+==================== 24 passed, 18 subtests passed in 0.27s ====================
 ```
-All unit tests, database migrations, and mock dispatches continue to function with 100% backward and forward compatibility.
+All unit tests, database migrations, and mock dispatches continue to function with full code-path and database compatibility.
+
+> **Compatibility scope note:** "Compatible" covers the code paths, settings row, and database schema. **Live credentials are not portable:** a previously saved Semaphore API key will be rejected by PhilSMS (HTTP 401) — existing deployments must generate a PhilSMS Bearer token and follow the §4 migration steps before live dispatch works.

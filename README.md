@@ -114,7 +114,7 @@ graph TD
     end
 
     subgraph External_Network ["External Channels"]
-        CloudSMS["Cloud SMS REST API<br/>(Semaphore / PhilSMS)"]
+        CloudSMS["PhilSMS Cloud REST API (v3)<br/>(migrated from Semaphore 11-09-2026)"]
         SMTPServer["Campus SMTP Server<br/>(TLS Port 587)"]
         MockEngine["Local Mock Simulation<br/>(Zero Cost / Offline)"]
     end
@@ -155,7 +155,11 @@ Project6/
 │   ├── 09-09-2026_TapNQue_SMS_Tier2_Audit_Report.docx
 │   ├── 09-09-2026_TapNQue_Windows_Setup_and_Run_Guide.docx
 │   ├── 11-09-2026_FREE_SMS_ALTERNATIVES_RESEARCH.md
-│   └── 11-09-2026_FREE_SMS_ALTERNATIVES_RESEARCH.docx
+│   ├── 11-09-2026_FREE_SMS_ALTERNATIVES_RESEARCH.docx
+│   ├── 11-09-2026_SEMAPHORE_TO_PHILSMS_MIGRATION.md
+│   ├── 11-09-2026_TapNQue_Comprehensive_System_Guide_and_PhilSMS_Manual.md
+│   ├── 11-09-2026_TapNQue_Comprehensive_System_Guide_and_PhilSMS_Manual.docx
+│   └── 11-09-2026_TapNQue_PhilSMS_Migration_Audit_Report.docx
 ├── src/                             # Python source package (PEP 518/621)
 │   └── tapnque/
 │       ├── __init__.py
@@ -323,7 +327,7 @@ All documentation in [`docs/`](docs/) is organized following the standardized `D
 
 1. **[`06-09-2026_PROJECT_AUDIT_AND_REVIEW.md`](docs/06-09-2026_PROJECT_AUDIT_AND_REVIEW.md):** Complete technical audit and remediation register (SEC-01 through PATH-01).
 2. **[`06-09-2026_TapNQue_SMS_Integration_Project_Quote.docx`](docs/06-09-2026_TapNQue_SMS_Integration_Project_Quote.docx):** Formal freelance project proposal & quote for Tier 1, 2, and 3 packages.
-3. **[`09-09-2026_SMS_TIER2_IMPLEMENTATION_PLAN.md`](docs/09-09-2026_SMS_TIER2_IMPLEMENTATION_PLAN.md):** Technical blueprint, schema migrations, and trigger mechanics for pure software SMS.
+3. **[`09-09-2026_SMS_TIER2_IMPLEMENTATION_PLAN.md`](docs/09-09-2026_SMS_TIER2_IMPLEMENTATION_PLAN.md):** Technical blueprint, schema migrations, and trigger mechanics for pure software SMS. *(Semaphore-era; superseded on the gateway layer by the 11-09-2026 PhilSMS migration — entries 11–13 below.)*
 4. **[`09-09-2026_SMS_TIER2_COMPLETION_REPORT.md`](docs/09-09-2026_SMS_TIER2_COMPLETION_REPORT.md):** Deliverable sign-off report confirming 100% completion and 22/22 unit tests passing.
 5. **[`09-09-2026_TapNQue_Comprehensive_System_Guide_and_SMS_Manual.md`](docs/09-09-2026_TapNQue_Comprehensive_System_Guide_and_SMS_Manual.md):** Complete operations manual, credential guide, and SMS simulation walkthrough.
 6. **[`09-09-2026_TapNQue_Comprehensive_System_Guide_and_SMS_Manual.docx`](docs/09-09-2026_TapNQue_Comprehensive_System_Guide_and_SMS_Manual.docx):** Word document companion for the comprehensive system manual.
@@ -331,6 +335,9 @@ All documentation in [`docs/`](docs/) is organized following the standardized `D
 8. **[`09-09-2026_TapNQue_Windows_Setup_and_Run_Guide.docx`](docs/09-09-2026_TapNQue_Windows_Setup_and_Run_Guide.docx):** Step-by-step Windows setup and execution guide in standard all-black TNR 11.
 9. **[`11-09-2026_FREE_SMS_ALTERNATIVES_RESEARCH.md`](docs/11-09-2026_FREE_SMS_ALTERNATIVES_RESEARCH.md):** Comprehensive technical research report evaluating free SMS alternatives aside from Semaphore.
 10. **[`11-09-2026_FREE_SMS_ALTERNATIVES_RESEARCH.docx`](docs/11-09-2026_FREE_SMS_ALTERNATIVES_RESEARCH.docx):** Standard all-black TNR 11 Word document companion of the free SMS research report.
+11. **[`11-09-2026_SEMAPHORE_TO_PHILSMS_MIGRATION.md`](docs/11-09-2026_SEMAPHORE_TO_PHILSMS_MIGRATION.md):** Gateway migration report — Semaphore to PhilSMS (REST API v3), rationale, payload comparison, and operator migration steps.
+12. **[`11-09-2026_TapNQue_Comprehensive_System_Guide_and_PhilSMS_Manual.md`](docs/11-09-2026_TapNQue_Comprehensive_System_Guide_and_PhilSMS_Manual.md) / [`.docx`](docs/11-09-2026_TapNQue_Comprehensive_System_Guide_and_PhilSMS_Manual.docx):** Current operations manual — PhilSMS account setup, gateway configuration, troubleshooting table, and hands-on simulation walkthrough.
+13. **[`11-09-2026_TapNQue_PhilSMS_Migration_Audit_Report.docx`](docs/11-09-2026_TapNQue_PhilSMS_Migration_Audit_Report.docx):** Independent audit of the PhilSMS migration against the Tier 2 scope (findings M1–M10), in standard all-black TNR 11.
 
 ---
 

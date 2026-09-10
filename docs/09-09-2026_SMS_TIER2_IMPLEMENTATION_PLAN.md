@@ -8,6 +8,10 @@
 **Target Platform:** Python 3.8+ / PySide6 (Qt) / SQLite 3 (WAL Mode)  
 
 ---
+> ⚠️ **SUPERSEDED (11-09-2026):** The SMS gateway client described in this document targeted **Semaphore**. The system has migrated to **PhilSMS** (REST API v3, JSON + Bearer token). For the current implementation, see `11-09-2026_SEMAPHORE_TO_PHILSMS_MIGRATION.md` and `11-09-2026_TapNQue_Comprehensive_System_Guide_and_PhilSMS_Manual.md`. Semaphore-specific statements below are retained as historical record only.
+
+---
+
 
 ## 1. Executive Summary & Scope Definition
 

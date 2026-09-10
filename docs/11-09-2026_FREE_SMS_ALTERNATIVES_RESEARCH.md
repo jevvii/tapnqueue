@@ -9,6 +9,10 @@
 **Companion Word Document:** [`11-09-2026_FREE_SMS_ALTERNATIVES_RESEARCH.docx`](file:///home/javvii/FreelanceProject/Project6/docs/11-09-2026_FREE_SMS_ALTERNATIVES_RESEARCH.docx)  
 
 ---
+> 📌 **OUTCOME (11-09-2026):** This research concluded with the selection of **PhilSMS**; the TapNQue gateway client was migrated from Semaphore to PhilSMS the same day. References to Semaphore as the 'current' provider below describe the pre-migration state. See `11-09-2026_SEMAPHORE_TO_PHILSMS_MIGRATION.md` for the executed migration.
+
+---
+
 
 ## 1. Executive Summary & Research Motivation
 

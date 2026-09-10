@@ -1,7 +1,7 @@
 """
 TapNQue SMS Notification Service.
-Provides asynchronous, non-blocking SMS dispatch via Cloud API (Semaphore/PhilSMS)
-with built-in Mock Simulation Mode for capstone defenses and rehearsals.
+Provides asynchronous, non-blocking SMS dispatch via the PhilSMS Cloud REST API
+(v3) with built-in Mock Simulation Mode for capstone defenses and rehearsals.
 """
 
 import json
@@ -98,6 +98,20 @@ def format_sms_template(template: str, context: Dict[str, Any]) -> str:
 
 # ==================== Cloud Gateway & Mock Engine ====================
 
+def to_gateway_recipient(phone: str) -> str:
+    """Convert a normalized PH number to the PhilSMS-documented international form.
+
+    Internal numbers are canonical 11-digit '09XXXXXXXXX', but the official
+    PhilSMS v3 examples use the country-code form without '+' ('639XXXXXXXXX').
+    The conversion happens only at the gateway boundary; local storage, mock
+    logs, and the UI keep the familiar 09-format.
+    """
+    digits = re.sub(r"\D", "", str(phone))
+    if digits.startswith("0"):
+        digits = "63" + digits[1:]
+    return digits
+
+
 def send_via_gateway(
     phone: str,
     message: str,
@@ -107,15 +121,20 @@ def send_via_gateway(
     timeout: int = 8,
 ) -> Tuple[bool, str, Optional[str]]:
     """
-    Send SMS via cloud REST API (PhilSMS v3 format).
+    Send SMS via the PhilSMS cloud REST API (v3 JSON format).
     Returns (success: bool, status: str, detail_or_error: Optional[str]).
+
+    The HTTP status alone is not trusted: the JSON body is parsed and the
+    dispatch only counts as sent when the payload reports status == "success",
+    so gateway-level rejections (insufficient balance, invalid sender ID, ...)
+    are recorded as failures in the per-ticket sms_*_status columns.
     """
     if not api_key:
         return False, "failed", "API token is missing or not configured."
 
     sender_id = sender_name.strip() if sender_name else "PhilSMS"
     payload = {
-        "recipient": phone,
+        "recipient": to_gateway_recipient(phone),
         "sender_id": sender_id,
         "type": "plain",
         "message": message,
@@ -129,7 +148,7 @@ def send_via_gateway(
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "TapNQue-Kiosk/2.0",
+            "User-Agent": "TapNQue-Kiosk/2.2",
         },
         method="POST",
     )
@@ -138,6 +157,14 @@ def send_via_gateway(
         with urllib.request.urlopen(req, timeout=timeout) as response:
             body = response.read().decode("utf-8")
             logger.info("PhilSMS Cloud API response: %s", body)
+            try:
+                result = json.loads(body)
+            except (ValueError, TypeError):
+                result = None
+            if isinstance(result, dict) and result.get("status") not in (None, "success"):
+                err_msg = str(result.get("message") or result.get("status"))
+                logger.warning("PhilSMS gateway rejected dispatch: %s", err_msg)
+                return False, "failed", err_msg
             return True, "sent", body
     except urllib.error.HTTPError as err:
         err_msg = f"HTTP {err.code}: {err.reason}"
@@ -274,13 +301,16 @@ class _SMSQueueManager:
 
         is_mock = settings.get("sms_mock_mode", True)
         api_key = settings.get("sms_api_key", "").strip()
-        sender_name = settings.get("sms_sender_name", "TapNQue").strip()
+        sender_name = settings.get("sms_sender_name", "PhilSMS").strip()
+        gateway_url = settings.get("sms_gateway_url", "").strip() or SMS_GATEWAY_URL
 
         # If mock mode is active, or if API key is not configured, fallback to simulation
         if is_mock or not api_key:
             success, status, err = simulate_mock_sms(phone, message, event_type, ticket_number)
         else:
-            success, status, err = send_via_gateway(phone, message, api_key, sender_name)
+            success, status, err = send_via_gateway(
+                phone, message, api_key, sender_name, gateway_url=gateway_url
+            )
 
         if ticket_number:
             db.update_ticket_sms_status(ticket_number, event_type, status, err)

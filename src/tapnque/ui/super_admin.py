@@ -843,7 +843,20 @@ class SuperAdmin(QWidget):
 
     def _save_sms_settings(self):
         api_key = self.sms_api_key_input.text().strip()
-        sender_name = self.sms_sender_input.text().strip() or "TapNQue"
+        sender_name = self.sms_sender_input.text().strip() or "PhilSMS"
+
+        # PhilSMS requires sender_id to be alphanumeric, max 11 characters.
+        if not sender_name.isalnum():
+            QMessageBox.warning(
+                self,
+                "Invalid Sender ID",
+                "PhilSMS Sender IDs must be alphanumeric only (letters and digits, "
+                "no spaces or symbols), up to 11 characters.\n\n"
+                "Any custom Sender ID must also be pre-registered and approved in the "
+                "PhilSMS dashboard; otherwise use the default sender ID 'PhilSMS'.",
+            )
+            return
+
         created_tmpl = self.sms_created_template_input.text().strip()
         called_tmpl = self.sms_called_template_input.text().strip()
         completed_tmpl = self.sms_completed_template_input.text().strip()

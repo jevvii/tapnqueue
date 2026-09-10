@@ -326,6 +326,13 @@ class TestSMSService(unittest.TestCase):
         drain_sms_queue()
         self.assertEqual(len(get_mock_sms_history()), 2)
 
+    def test_gateway_recipient_format_conversion(self):
+        """Verify local 09-format numbers convert to the PhilSMS-documented 63-format."""
+        from tapnque.services.sms_service import to_gateway_recipient
+        self.assertEqual(to_gateway_recipient("09171234567"), "639171234567")
+        self.assertEqual(to_gateway_recipient("639171234567"), "639171234567")
+        self.assertEqual(to_gateway_recipient("+639171234567"), "639171234567")
+
     @patch("urllib.request.urlopen")
     def test_send_via_gateway_success(self, mock_urlopen):
         """Verify that send_via_gateway sends formatted PhilSMS POST request and parses response."""
@@ -355,10 +362,30 @@ class TestSMSService(unittest.TestCase):
         self.assertEqual(req.headers.get("Accept"), "application/json")
 
         payload = json.loads(req.data.decode("utf-8"))
-        self.assertEqual(payload.get("recipient"), "09171234567")
+        # Local 09-format is converted to the documented 63-format at the gateway boundary
+        self.assertEqual(payload.get("recipient"), "639171234567")
         self.assertEqual(payload.get("sender_id"), "TapNQue")
         self.assertEqual(payload.get("type"), "plain")
         self.assertEqual(payload.get("message"), "Your ticket is ready.")
+
+    @patch("urllib.request.urlopen")
+    def test_send_via_gateway_json_error_body_recorded_as_failed(self, mock_urlopen):
+        """Verify that an HTTP 200 response with a JSON {"status": "error"} body is NOT recorded as sent."""
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{"status": "error", "message": "Insufficient SMS balance."}'
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        success, status, err = send_via_gateway(
+            phone="09171234567",
+            message="Your ticket is ready.",
+            api_key="valid_but_broke_token",
+            sender_name="TapNQue",
+        )
+
+        self.assertFalse(success)
+        self.assertEqual(status, "failed")
+        self.assertIn("Insufficient SMS balance", err)
 
     @patch("urllib.request.urlopen")
     def test_send_via_gateway_http_error(self, mock_urlopen):
