@@ -121,7 +121,87 @@ To prevent network latency from freezing the graphical user interface, dispatche
 
 ---
 
-## 5. Safe Capstone Mock Simulation Mode
+## 5. Step-by-Step PhilSMS Account Setup & Gateway Configuration Guide
+
+This section provides the end-to-end procedure for creating a PhilSMS cloud account, generating API credentials, procuring SMS credits, and binding the gateway to the TapNQue system.
+
+### 5.1 Account Registration & Portal Onboarding
+1. **Access Portal:** Open a web browser and navigate to `https://app.philsms.com/`.
+2. **Create Account:** Click **Register** / **Sign Up** and complete the registration form with your institution or project email, full legal name, and a secure password.
+3. **Email Verification:** Access your email inbox and click the verification link sent by the PhilSMS automated activation engine.
+4. **Dashboard Access:** Log in to the PhilSMS dashboard at `https://app.philsms.com/login` to confirm account activation.
+
+### 5.2 Generating API Access Tokens (Bearer Key)
+1. **Navigate to API Settings:** In the left-hand navigation sidebar of the PhilSMS dashboard, select **Developers** (or **API Settings**) > **API Access Tokens**.
+2. **Generate New Token:** Click the **Generate New Token** (or **Create API Key**) button.
+3. **Name Token:** Assign a descriptive label (e.g., `TapNQue Campus Queue Kiosk`).
+4. **Copy Secret Token:** Copy the generated 60+ character hexadecimal API Bearer token string immediately. Store this string securely; it will not be shown again in the portal.
+5. **Security Precaution:** Never commit this secret token to public GitHub or version control repositories. Store it exclusively in the local `.env` file or within the secure SQLite database via Super Admin.
+
+### 5.3 Sender ID Selection & Provisioning
+1. **Default Pre-Approved Sender ID (`PhilSMS`):** Every registered PhilSMS account comes pre-configured with the default sender ID `PhilSMS`. This ID is instantly active, requires zero documentation or carrier review, and works immediately for testing, development, and capstone evaluations.
+2. **Custom Institutional Sender ID (Optional):** To display a branded school or department name (e.g., `TapNQue` or `OLFU`):
+   - Navigate to **Sender IDs** > **Request Sender ID** in the PhilSMS dashboard.
+   - Enter your desired 11-character alphanumeric identifier.
+   - Upload the required institutional authorization documents (e.g., University Dean endorsement or DTI/SEC registration).
+   - Telco review takes 3–7 business days across Smart, Globe, and Dito telecommunications networks.
+
+### 5.4 SMS Credit Top-Up & Pricing Overview
+1. **Transparent Pricing:** Standard outgoing dispatches cost approximately **₱0.35 to ₱0.40 per 160-character SMS segment**—representing a ~30% cost reduction compared to legacy carriers.
+2. **No Minimum Top-Up Requirement:** Unlike competitors that force ₱500 to ₱1,000 upfront reloads, PhilSMS supports micro reloads starting as low as **₱50.00 to ₱100.00**, making it optimal for academic capstone projects and student budgets.
+3. **Payment Methods:** Instant automated credit loading via **GCash**, **Maya**, **ShopeePay**, **Dragonpay**, and Philippine Online Banking (BDO, BPI, UnionBank).
+4. **Non-Expiring Balance:** Purchased SMS credits have no expiration date, remaining fully valid across multiple academic semesters.
+
+### 5.5 Configuring TapNQue for PhilSMS Integration
+
+Administrators can configure the PhilSMS gateway using either the Graphical User Interface (recommended) or Environment Variables:
+
+#### Method A: Graphical Configuration via Super Admin Console (Recommended)
+1. Launch the Super Admin interface:
+   ```bash
+   python run_admin.py
+   ```
+2. Log in using administrative credentials (`admin` / `admin123`).
+3. Select the **Settings** tab and scroll to the **SMS Gateway & Capstone Simulation** section.
+4. Paste your secret token into the **PhilSMS API Token / Bearer Key** input field.
+5. Set the **Sender Name / Sender ID** to `PhilSMS` (or your verified custom sender ID).
+6. Verify that the Gateway Endpoint displays `https://app.philsms.com/api/v3/sms/send`.
+7. Click the toggle button **SWITCH TO LIVE GATEWAY**. The status badge will change to a green indicator reading `● LIVE GATEWAY ACTIVE (PhilSMS Cloud REST API Dispatches)`.
+8. Click **SAVE SMS CONFIGURATION** to commit the settings into the local SQLite database.
+
+#### Method B: Configuration via Environment Variables (`.env`)
+For automated deployments and headless servers, create or update the `.env` file in the project root:
+```env
+TAPNQUE_SMS_GATEWAY_URL=https://app.philsms.com/api/v3/sms/send
+TAPNQUE_SMS_API_KEY=your_copied_philsms_api_bearer_token
+TAPNQUE_SMS_SENDER_NAME=PhilSMS
+TAPNQUE_SMS_MOCK_MODE=0
+TAPNQUE_SMS_ENABLED=1
+```
+
+### 5.6 Live Gateway Verification & Test Dispatch Procedure
+1. In the Super Admin console, navigate to **Settings** > **SMS Gateway & Capstone Simulation**.
+2. Click the **TEST DISPATCH (LIVE / MOCK)** button to open the dispatch modal.
+3. Enter a valid 11-digit Philippine mobile phone number (e.g., `09171234567`).
+4. Click **SEND TEST MESSAGE**.
+5. Observe the live status feedback:
+   - In **Live Mode**, the message is routed through the PhilSMS Cloud REST API, and the mobile device will receive the notification within 3–15 seconds.
+   - In **Mock Mode**, the system simulates the delivery without network expenditure and records the event in the session audit log.
+
+### 5.7 PhilSMS API Diagnostics & Error Troubleshooting Reference Table
+
+| HTTP Status / Error | Diagnostic Cause | Immediate Remediation Action |
+| :--- | :--- | :--- |
+| **HTTP 200 OK (`success: true`)** | Message accepted by PhilSMS gateway and enqueued for telco dispatch | Normal operation; message will be delivered to the carrier network. |
+| **HTTP 401 Unauthorized** | The API Bearer token is missing, expired, or typed incorrectly | Verify the Bearer token in Super Admin Settings or `.env`. Re-generate a token in the PhilSMS dashboard if needed. |
+| **HTTP 403 Forbidden** | Requested Sender ID is unapproved or account requires verification | Set Sender ID back to default `PhilSMS`. Verify account email activation in the PhilSMS dashboard. |
+| **HTTP 422 Unprocessable Entity** | Recipient phone number is improperly formatted or required parameter missing | Ensure phone number conforms to Philippine 11-digit format (`09XXXXXXXXX`). Check that message body is non-empty. |
+| **HTTP 402 / Insufficient Balance** | Account SMS balance has depleted to zero | Log in to `https://app.philsms.com/` and reload credits via GCash or Maya. |
+| **Connection Timeout (> 8s)** | Internet connectivity disruption between station and PhilSMS cloud servers | Check campus Wi-Fi / Ethernet connectivity. The asynchronous daemon logs the error without freezing the station. |
+
+---
+
+## 6. Safe Capstone Mock Simulation Mode
 
 For academic capstone defenses, faculty panel demonstrations, and offline laboratory testing, TapNQue features an integrated Mock Simulation Mode:
 - **Zero Cost & No Internet Requirement:** Dispatches are simulated in-memory and logged to the local SQLite database without contacting PhilSMS servers or consuming prepaid balance.
@@ -134,19 +214,19 @@ For academic capstone defenses, faculty panel demonstrations, and offline labora
 
 ---
 
-## 6. Step-by-Step Deployment & Operations Guide
+## 7. Step-by-Step Deployment & Operations Guide
 
 TapNQue is engineered for cross-platform deployment on Windows 10/11 and Linux workstations:
 
-### 6.1 Environment Setup & Installation
+### 7.1 Environment Setup & Installation
 1. **Step 1:** Clone or extract project bundle to target directory (`/home/javvii/FreelanceProject/Project6`).
 2. **Step 2:** Initialize virtual environment: `python3 -m venv .venv`
 3. **Step 3:** Activate virtual environment:
    - Linux: `source .venv/bin/activate`
-   - Windows: `.venv\Scripts\activate`
+   - Windows: `.venv\Scriptsctivate`
 4. **Step 4:** Install dependencies: `pip install -r requirements.txt`
 
-### 6.2 Launching System Stations
+### 7.2 Launching System Stations
 
 | Station Role | Python Launch Command | Windows Batch Script | Primary Screen Target |
 | :--- | :--- | :--- | :--- |
@@ -157,11 +237,11 @@ TapNQue is engineered for cross-platform deployment on Windows 10/11 and Linux w
 
 ---
 
-## 7. Database Schema & Data Dictionary
+## 8. Database Schema & Data Dictionary
 
 The SQLite database operates at `data/kiosk.db`.
 
-### 7.1 Tickets Table Schema
+### 8.1 Tickets Table Schema
 
 | Column Name | Data Type | Constraint | Operational Purpose |
 | :--- | :--- | :--- | :--- |
@@ -184,7 +264,7 @@ The SQLite database operates at `data/kiosk.db`.
 | `sms_status_completed` | `TEXT` | `DEFAULT 'pending'` | Dispatch state of Trigger 3 SMS |
 | `sms_last_error` | `TEXT` | `NULL` | Error message or HTTP code if dispatch failed |
 
-### 7.2 Settings Table Schema
+### 8.2 Settings Table Schema
 Settings are stored as key-value pairs in the `settings` table:
 - `sms_enabled`: '1' (active) or '0' (disabled).
 - `sms_mock_mode`: '1' (local mock simulation) or '0' (live PhilSMS API dispatches).
