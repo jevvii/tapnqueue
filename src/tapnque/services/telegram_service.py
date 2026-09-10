@@ -126,6 +126,100 @@ def format_telegram_template(template: str, context: Dict[str, Any]) -> str:
 
 # ==================== Cloud Bot API & Mock Simulator ====================
 
+def fetch_recent_telegram_users(bot_token: str, timeout: int = 5) -> List[Dict[str, Any]]:
+    """
+    Query getUpdates on the Telegram Bot to retrieve users who recently interacted with the bot.
+    Returns a list of dicts with keys: chat_id, username, first_name, last_name, display_name.
+    """
+    if not bot_token:
+        return []
+    url = f"https://api.telegram.org/bot{bot_token}/getUpdates"
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "TapNQue-TelegramBot/2.0",
+                "Accept": "application/json",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if not data.get("ok"):
+                return []
+            users = []
+            seen_ids = set()
+            for item in reversed(data.get("result", [])):
+                msg = (
+                    item.get("message")
+                    or item.get("edited_message")
+                    or item.get("callback_query", {}).get("message")
+                )
+                if not msg:
+                    continue
+                chat = msg.get("chat") or {}
+                chat_id = chat.get("id")
+                if chat_id and chat_id not in seen_ids:
+                    seen_ids.add(chat_id)
+                    username = (chat.get("username") or "").strip().lstrip("@")
+                    first_name = (chat.get("first_name") or "").strip()
+                    last_name = (chat.get("last_name") or "").strip()
+                    display_parts = [p for p in (first_name, last_name) if p]
+                    display_name = " ".join(display_parts) if display_parts else (username or f"User {chat_id}")
+                    users.append({
+                        "chat_id": str(chat_id),
+                        "username": username,
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "display_name": display_name,
+                    })
+            return users
+    except Exception as exc:
+        logger.debug("Failed to fetch Telegram getUpdates: %s", exc)
+        return []
+
+
+def resolve_telegram_chat_id(target: str, bot_token: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Resolve a target string to a valid Telegram numeric chat ID.
+    If target is numeric (or starts with - for groups/channels), returns it directly.
+    If target is an @username, scans recent bot updates to match it to a numeric chat ID.
+    Returns (resolved_chat_id, error_message).
+    """
+    cleaned = (target or "").strip()
+    if not cleaned:
+        return None, "Chat ID or Username cannot be empty."
+
+    # Direct numeric Chat ID (user ID e.g. 123456789 or group ID e.g. -100123456789)
+    if cleaned.lstrip("-").isdigit():
+        return cleaned, None
+
+    # Check if someone accidentally passed a Philippine phone number
+    digits_only = re.sub(r"[^\d]", "", cleaned)
+    if (len(digits_only) == 11 and digits_only.startswith("09")) or (len(digits_only) == 12 and digits_only.startswith("639")):
+        return None, (
+            "Telegram Bot API does not support phone numbers as chat recipients.\n"
+            "Please use your numeric Telegram Chat ID (check @userinfobot)\n"
+            "or your @username after sending /start to your bot."
+        )
+
+    # Username resolution (@username or username)
+    clean_username = cleaned.lstrip("@").lower()
+    if bot_token:
+        recent_users = fetch_recent_telegram_users(bot_token)
+        for u in recent_users:
+            if u["username"].lower() == clean_username:
+                logger.info("Resolved @%s to Telegram Chat ID %s", clean_username, u["chat_id"])
+                return u["chat_id"], None
+
+    return None, (
+        f"Could not find an active Telegram chat for '@{clean_username}'.\n\n"
+        f"In Telegram:\n"
+        f"1. Open @OlfuTapNQue_bot on your phone or PC.\n"
+        f"2. Tap 'START' (or send /start) so the bot has permission to message you.\n"
+        f"3. Enter your numeric Chat ID (check @userinfobot) or try again with @{clean_username}."
+    )
+
+
 def send_via_telegram_api(
     chat_id: str,
     text: str,
@@ -140,9 +234,14 @@ def send_via_telegram_api(
     if not bot_token:
         return False, "failed", "Telegram bot token is missing or not configured."
 
+    # Auto-resolve username or validate numeric chat_id
+    resolved_id, resolve_err = resolve_telegram_chat_id(chat_id, bot_token)
+    if not resolved_id:
+        return False, "failed", resolve_err or "Invalid Telegram chat ID."
+
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
-        "chat_id": chat_id,
+        "chat_id": resolved_id,
         "text": text,
         "parse_mode": parse_mode,
         "disable_web_page_preview": True,
@@ -172,6 +271,11 @@ def send_via_telegram_api(
             err_msg += f" - {body}"
         except Exception:
             pass
+        if "chat not found" in err_msg.lower():
+            err_msg += (
+                "\n\nHint: Telegram bots cannot initiate chats with users first. "
+                "Open your bot in Telegram (@OlfuTapNQue_bot), tap 'START', and try again."
+            )
         logger.warning("Telegram Bot HTTP error: %s", err_msg)
         return False, "failed", err_msg
     except Exception as exc:

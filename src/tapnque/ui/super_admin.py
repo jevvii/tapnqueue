@@ -44,10 +44,12 @@ from tapnque.services.sms_service import (
 )
 from tapnque.services.telegram_service import (
     clear_mock_telegram_history,
+    fetch_recent_telegram_users,
     format_telegram_template,
     generate_telegram_qr_pixmap,
     get_mock_telegram_history,
     get_telegram_bot_link,
+    resolve_telegram_chat_id,
     send_via_telegram_api,
     simulate_mock_telegram,
 )
@@ -1237,12 +1239,36 @@ class SuperAdmin(QWidget):
         tg = self.db.get_telegram_settings()
         is_mock = tg.get("telegram_mock_mode", True)
         bot_token = tg.get("telegram_bot_token", "").strip()
+        bot_username = tg.get("telegram_bot_username", "OlfuTapNQue_bot").strip().lstrip("@")
+
+        recent_users = fetch_recent_telegram_users(bot_token) if bot_token else []
+
+        if recent_users:
+            latest = recent_users[0]
+            default_text = latest["chat_id"]
+            user_label = f"{latest['display_name']}"
+            if latest["username"]:
+                user_label += f" (@{latest['username']})"
+            prompt_desc = (
+                f"Enter recipient Telegram Chat ID or Username:\n\n"
+                f"✅ Active user detected from /start: {user_label}\n"
+                f"(Chat ID: {latest['chat_id']})\n\n"
+                f"Click OK to dispatch test alert, or enter another recipient:"
+            )
+        else:
+            default_text = ""
+            prompt_desc = (
+                f"Enter recipient Telegram Chat ID:\n\n"
+                f"ℹ️ Ensure the recipient has opened @{bot_username} in Telegram and tapped START.\n\n"
+                f"Enter your numeric Chat ID (obtain it via @userinfobot)\n"
+                f"or your @username (if you already tapped START):"
+            )
 
         chat_id, ok = QInputDialog.getText(
             self,
             "Test Telegram Dispatch",
-            "Enter recipient Telegram Chat ID or Username:\n(e.g., numeric chat ID like 123456789 or @student):",
-            text="@student",
+            prompt_desc,
+            text=default_text,
         )
         if not ok or not chat_id.strip():
             return
@@ -1263,13 +1289,13 @@ class SuperAdmin(QWidget):
                 QMessageBox.information(
                     self,
                     "Live Telegram Dispatch Successful",
-                    f"Message successfully sent via Telegram Bot API to {chat_id}!",
+                    f"Message successfully sent via Telegram Bot API to {chat_id}!\n\nStatus: {status}",
                 )
             else:
                 QMessageBox.warning(
                     self,
                     "Live Telegram Dispatch Failed",
-                    f"Failed to dispatch to Telegram API:\n{err}\n\nCheck your Bot Token and ensure the recipient has initiated a chat with your bot.",
+                    f"Failed to dispatch to Telegram API:\n{err}",
                 )
 
     def _view_telegram_logs(self):
