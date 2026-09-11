@@ -637,7 +637,7 @@ class SuperAdmin(QWidget):
         sender_lbl = QLabel("Sender ID (Max 11 characters):")
         sender_lbl.setStyleSheet("font-weight: 600; font-size: 13px;")
         self.sms_sender_input = QLineEdit()
-        self.sms_sender_input.setPlaceholderText("e.g. TapNQue")
+        self.sms_sender_input.setPlaceholderText("Optional: Leave blank for account default")
         self.sms_sender_input.setMaxLength(11)
 
         cred_grid.addWidget(api_key_lbl, 0, 0)
@@ -843,7 +843,7 @@ class SuperAdmin(QWidget):
 
     def _save_sms_settings(self):
         api_key = self.sms_api_key_input.text().strip()
-        sender_name = self.sms_sender_input.text().strip() or "TapNQue"
+        sender_name = self.sms_sender_input.text().strip()
         created_tmpl = self.sms_created_template_input.text().strip()
         called_tmpl = self.sms_called_template_input.text().strip()
         completed_tmpl = self.sms_completed_template_input.text().strip()

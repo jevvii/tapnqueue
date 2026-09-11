@@ -113,20 +113,27 @@ def send_via_gateway(
     if not api_key:
         return False, "failed", "API key is missing or not configured."
 
+    # Semaphore Caveat: Messages beginning with 'TEST' are silently dropped by the gateway
+    if message.strip().upper().startswith("TEST"):
+        logger.warning(
+            "Semaphore API Notice: Message starts with 'TEST'. Semaphore silently drops messages starting with 'TEST'."
+        )
+
     payload = {
-        "apikey": api_key,
+        "apikey": api_key.strip(),
         "number": phone,
         "message": message,
     }
-    if sender_name:
-        payload["sendername"] = sender_name
+    clean_sender = sender_name.strip() if sender_name else ""
+    if clean_sender:
+        payload["sendername"] = clean_sender
 
     data = urllib.parse.urlencode(payload).encode("utf-8")
     req = urllib.request.Request(
         gateway_url,
         data=data,
         headers={
-            "User-Agent": "TapNQue-Kiosk/2.0",
+            "User-Agent": "TapNQue-Kiosk/2.1",
             "Content-Type": "application/x-www-form-urlencoded",
         },
         method="POST",
@@ -136,6 +143,27 @@ def send_via_gateway(
         with urllib.request.urlopen(req, timeout=timeout) as response:
             body = response.read().decode("utf-8")
             logger.info("Cloud SMS API response: %s", body)
+
+            # Inspect Semaphore JSON response
+            try:
+                result = json.loads(body)
+            except (ValueError, TypeError):
+                result = None
+
+            if isinstance(result, list) and len(result) > 0:
+                first_item = result[0]
+                if isinstance(first_item, dict):
+                    msg_status = str(first_item.get("status", "")).lower()
+                    if msg_status in ("failed", "rejected"):
+                        err_msg = str(first_item.get("message") or f"Semaphore status: {first_item.get('status')}")
+                        logger.warning("Semaphore gateway dispatch failed: %s", err_msg)
+                        return False, "failed", err_msg
+            elif isinstance(result, dict):
+                if "error" in result or "errors" in result:
+                    err_msg = str(result.get("error") or result.get("errors") or result.get("message"))
+                    logger.warning("Semaphore gateway returned error: %s", err_msg)
+                    return False, "failed", err_msg
+
             return True, "sent", body
     except urllib.error.HTTPError as err:
         err_msg = f"HTTP {err.code}: {err.reason}"

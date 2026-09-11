@@ -377,6 +377,60 @@ class TestSMSService(unittest.TestCase):
         self.assertEqual(status, "failed")
         self.assertIn("401", err)
 
+    @patch("urllib.request.urlopen")
+    def test_send_via_gateway_without_sender_name(self, mock_urlopen):
+        """Verify that sendername is omitted from POST data when sender_name is empty."""
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'[{"message_id": 99999, "status": "Queued"}]'
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        success, status, body = send_via_gateway(
+            phone="09181234567",
+            message="Your ticket is ready.",
+            api_key="valid_semaphore_key",
+            sender_name="",
+        )
+        self.assertTrue(success)
+        req = mock_urlopen.call_args[0][0]
+        decoded_data = req.data.decode("utf-8")
+        self.assertNotIn("sendername", decoded_data)
+
+    @patch("urllib.request.urlopen")
+    def test_send_via_gateway_failed_status_in_json(self, mock_urlopen):
+        """Verify that Semaphore JSON with Failed status is detected as failure."""
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'[{"status": "Failed", "message": "Account has insufficient balance"}]'
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        success, status, err = send_via_gateway(
+            phone="09181234567",
+            message="Your ticket is ready.",
+            api_key="valid_semaphore_key",
+            sender_name="TapNQue",
+        )
+        self.assertFalse(success)
+        self.assertEqual(status, "failed")
+        self.assertIn("insufficient balance", err)
+
+    @patch("urllib.request.urlopen")
+    def test_send_via_gateway_test_prefix_warning(self, mock_urlopen):
+        """Verify that message starting with TEST logs a warning about Semaphore silent drop."""
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'[{"message_id": 12345, "status": "Queued"}]'
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        with self.assertLogs("tapnque.sms", level="WARNING") as log_ctx:
+            success, status, body = send_via_gateway(
+                phone="09181234567",
+                message="TEST message verification",
+                api_key="valid_semaphore_key",
+                sender_name="TapNQue",
+            )
+            self.assertTrue(any("TEST" in m for m in log_ctx.output))
+
 
 if __name__ == "__main__":
     unittest.main()
