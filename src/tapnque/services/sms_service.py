@@ -300,7 +300,7 @@ class _SMSQueueManager:
 
         is_mock = settings.get("sms_mock_mode", True)
         api_key = settings.get("sms_api_key", "").strip()
-        sender_name = settings.get("sms_sender_name", "TapNQue").strip()
+        sender_name = settings.get("sms_sender_name", "").strip()
 
         # If mock mode is active, or if API key is not configured, fallback to simulation
         if is_mock or not api_key:
