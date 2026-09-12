@@ -920,7 +920,7 @@ class SuperAdmin(QWidget):
 
         is_mock = sms.get("sms_mock_mode", True)
         api_key = sms.get("sms_api_key", "").strip()
-        sender = sms.get("sms_sender_name", "TapNQue").strip()
+        sender = sms.get("sms_sender_name", "PhilSMS").strip()
 
         test_context = {
             "name": "Juan Dela Cruz",
