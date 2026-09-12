@@ -835,8 +835,6 @@ class StudentKiosk(QWidget):
                 email_sent = False
 
             sms_sent = False
-            if phone_formatted:
-                sms_sent = send_ticket_created_sms(ticket, queue_position)
 
             if telegram_offered:
                 # Arm the background listener so a scanned QR + START tap
