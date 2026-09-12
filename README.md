@@ -315,7 +315,7 @@ tests/test_sms.py::TestSMSService::test_ticket_sms_status_tracking PASSED       
 All operational documentation in [`docs/`](docs/) is organized following the standardized `DD-MM-YYYY` date convention:
 
 1. **[`11-09-2026_TapNQue_Comprehensive_System_Guide_and_Semaphore_Manual.docx`](docs/11-09-2026_TapNQue_Comprehensive_System_Guide_and_Semaphore_Manual.docx)** / **[`.md`](docs/11-09-2026_TapNQue_Comprehensive_System_Guide_and_Semaphore_Manual.md):** Complete operations manual, administrative credential guide, Semaphore API v4 configuration, and pure software SMS simulation walkthrough.
-2. **[`09-09-2026_TapNQue_Windows_Setup_and_Run_Guide.docx`](docs/09-09-2026_TapNQue_Windows_Setup_and_Run_Guide.docx):** Step-by-step Windows setup and execution guide in standard all-black TNR 11.
+2. **[`09-09-2026_TapNQue_Windows_Setup_and_Run_Guide.docx`](docs/09-09-2026_TapNQue_Windows_Setup_and_Run_Guide.docx):** Step-by-step Windows setup and execution guide.
 
 ---
 
