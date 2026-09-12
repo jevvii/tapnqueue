@@ -20,6 +20,16 @@ from .sms_service import (
     send_ticket_completed_sms,
     send_ticket_created_sms,
 )
+from .telegram_service import (
+    clear_mock_telegram_history,
+    format_telegram_template,
+    generate_telegram_qr_pixmap,
+    get_mock_telegram_history,
+    get_telegram_bot_link,
+    send_ticket_called_telegram,
+    send_ticket_completed_telegram,
+    send_ticket_created_telegram,
+)
 
 __all__ = [
     "is_email_configured",
@@ -35,4 +45,12 @@ __all__ = [
     "send_ticket_completed_sms",
     "get_mock_sms_history",
     "clear_mock_sms_history",
+    "get_telegram_bot_link",
+    "generate_telegram_qr_pixmap",
+    "format_telegram_template",
+    "send_ticket_created_telegram",
+    "send_ticket_called_telegram",
+    "send_ticket_completed_telegram",
+    "get_mock_telegram_history",
+    "clear_mock_telegram_history",
 ]

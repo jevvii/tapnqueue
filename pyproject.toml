@@ -29,6 +29,8 @@ classifiers = [
 ]
 dependencies = [
     "PySide6>=6.5.0",
+    "qrcode>=8.0.0",
+    "pillow>=11.0.0",
 ]
 
 [project.optional-dependencies]

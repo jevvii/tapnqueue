@@ -38,6 +38,47 @@ DEFAULT_SMS_MOCK_MODE = os.getenv("TAPNQUE_SMS_MOCK_MODE", "1").strip().lower() 
 DEFAULT_SMS_API_KEY = os.getenv("TAPNQUE_SMS_API_KEY", "").strip()
 DEFAULT_SMS_SENDER_NAME = os.getenv("TAPNQUE_SMS_SENDER_NAME", "TapNQue").strip()
 
+# Telegram Bot & QR Code Notification Settings
+TELEGRAM_BOT_TOKEN = os.getenv("TAPNQUE_TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_BOT_USERNAME = os.getenv("TAPNQUE_TELEGRAM_BOT_USERNAME", "").strip().lstrip("@")
+DEFAULT_TELEGRAM_ENABLED = os.getenv("TAPNQUE_TELEGRAM_ENABLED", "1").strip().lower() in ("1", "true", "yes")
+DEFAULT_TELEGRAM_MOCK_MODE = os.getenv("TAPNQUE_TELEGRAM_MOCK_MODE", "1").strip().lower() in ("1", "true", "yes")
+
+# Modern High-Impact Telegram Notification Templates
+DEFAULT_TELEGRAM_TEMPLATE_CREATED = (
+    "🎟️ *TICKET CONFIRMED: #{ticket}*\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "📍 *Current Line Position: #{position}*\n\n"
+    "👤 *Student:* {name}\n"
+    "📋 *Service:* {purpose}\n"
+    "🎫 *Ticket Number:* #{ticket}\n\n"
+    "💡 *What to do next:*\n"
+    "Relax and keep this chat open. Your phone will buzz with an alert the moment your counter is assigned!\n\n"
+    "_TapNQue • OLFU Student Services_"
+)
+
+DEFAULT_TELEGRAM_TEMPLATE_CALLED = (
+    "🚨 *PROCEED TO COUNTER {counter} NOW*\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "📢 *NOW SERVING TICKET #{ticket}*\n\n"
+    "👤 *Student:* {name}\n"
+    "📋 *Service:* {purpose}\n"
+    "📍 *Assigned Station:* Counter {counter}\n\n"
+    "⚡ *Action Required:*\n"
+    "Please report directly to *Counter {counter}* with your requirements to be accommodated.\n\n"
+    "_TapNQue • OLFU Student Services_"
+)
+
+DEFAULT_TELEGRAM_TEMPLATE_COMPLETED = (
+    "✅ *SERVICE COMPLETED: #{ticket}*\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "👤 *Student:* {name}\n"
+    "📋 *Service:* {purpose}\n"
+    "🎫 *Ticket Number:* #{ticket}\n\n"
+    "✨ Your transaction has been marked completed by the counter officer. Thank you for visiting TapNQue!\n\n"
+    "_TapNQue • OLFU Student Services_"
+)
+
 
 def get_asset_path(filename: str) -> Path:
     """

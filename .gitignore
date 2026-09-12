@@ -54,3 +54,6 @@ htmlcov/
 *.db-journal
 *.db-wal
 *.db-shm
+
+# LibreOffice lock files
+.~lock.*#

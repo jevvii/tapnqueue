@@ -27,6 +27,10 @@ from tapnque.core.auth import require_admin_login
 from tapnque.core.database import get_database
 from tapnque.services.email_service import is_email_configured, send_called_email, send_served_email
 from tapnque.services.sms_service import send_ticket_called_sms, send_ticket_completed_sms
+from tapnque.services.telegram_service import (
+    send_ticket_called_telegram,
+    send_ticket_completed_telegram,
+)
 from tapnque.ui.components.dialogs import HistoryDialog
 
 
@@ -403,6 +407,7 @@ class StaffAdmin(QWidget):
                 async_send=True,
             )
         send_ticket_called_sms(ticket, self.service_counter_id)
+        send_ticket_called_telegram(ticket, self.service_counter_id)
         self._refresh_queue()
 
     def _recall_ticket(self):
@@ -429,6 +434,7 @@ class StaffAdmin(QWidget):
             )
         if active_ticket:
             send_ticket_called_sms(active_ticket, self.service_counter_id)
+            send_ticket_called_telegram(active_ticket, self.service_counter_id)
         self._refresh_queue()
 
     def _mark_done(self):
@@ -455,6 +461,7 @@ class StaffAdmin(QWidget):
             )
         if active_ticket:
             send_ticket_completed_sms(active_ticket)
+            send_ticket_completed_telegram(active_ticket)
         self.current_ticket = None
         self._refresh_queue()
 
