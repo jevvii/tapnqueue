@@ -199,7 +199,7 @@ Project6/
 
 ```bash
 # Clone or navigate to directory
-cd Project6
+cd TapNQue
 
 # Create an isolated virtual environment
 python -m venv .venv
