@@ -84,9 +84,14 @@ class TicketCreatedDialog(QDialog):
 
     def _update_countdown_display(self):
         if hasattr(self, "auto_close_hint") and self.auto_close_hint is not None:
-            self.auto_close_hint.setText(
-                f"⏱️ This screen closes automatically in {self.remaining_seconds}s"
-            )
+            if self.telegram_offered:
+                self.auto_close_hint.setText(
+                    f"⏱ Auto-closing in {self.remaining_seconds}s • Take a photo or scan the Telegram QR"
+                )
+            else:
+                self.auto_close_hint.setText(
+                    f"⏱ Auto-closing in {self.remaining_seconds}s • Please remember your ticket number"
+                )
         if hasattr(self, "done_button") and self.done_button is not None:
             self.done_button.setText(f"DONE ({self.remaining_seconds}s)")
 
@@ -104,10 +109,10 @@ class TicketCreatedDialog(QDialog):
                 self._stop_timers()
                 self._is_closing = True
                 if hasattr(self, "scan_status_pill") and self.scan_status_pill is not None:
-                    self.scan_status_pill.setText("✅ QR Scanned! Connecting...")
+                    self.scan_status_pill.setText("✅ Telegram Connected! Auto-closing...")
                     self.scan_status_pill.setStyleSheet(
-                        "background: #105938; color: #ffffff; border: 1px solid #4dd38a; "
-                        "border-radius: 12px; padding: 6px 14px; font-size: 12px; font-weight: 800;"
+                        "background: #065f46; color: #ffffff; border: 1px solid #34d399; "
+                        "border-radius: 12px; padding: 6px 14px; font-size: 11px; font-weight: 800;"
                     )
                 self.accept()
         except Exception as exc:
@@ -139,148 +144,179 @@ class TicketCreatedDialog(QDialog):
             """
             TicketCreatedDialog {
                 background: transparent;
-                font-family: "Segoe UI", "Noto Sans", "DejaVu Sans", sans-serif;
+                font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Noto Sans", sans-serif;
             }
             QFrame#dialogCard {
                 background: qlineargradient(
                     x1: 0, y1: 0, x2: 1, y2: 1,
-                    stop: 0 #071912,
-                    stop: 0.55 #0a2417,
-                    stop: 1 #123223
+                    stop: 0 #051810,
+                    stop: 0.5 #082417,
+                    stop: 1 #0d3422
                 );
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 34px;
-            }
-            QFrame#ticketBadge {
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                border: 1px solid rgba(255, 255, 255, 0.1);
                 border-radius: 28px;
             }
-            QFrame#detailPanel {
-                background: rgba(247, 251, 248, 0.07);
+            QFrame#ticketBadge {
+                background: rgba(255, 255, 255, 0.04);
                 border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 24px;
+                border-radius: 20px;
+            }
+            QFrame#detailPanel {
+                background: rgba(255, 255, 255, 0.04);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 20px;
             }
             QFrame#telegramHeroCard {
                 background: qlineargradient(
-                    x1: 0, y1: 0, x2: 1, y2: 1,
-                    stop: 0 #f7fdf9,
-                    stop: 1 #eef8f2
+                    x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #092c1e,
+                    stop: 1 #051b12
                 );
-                border: 2px solid #4dd38a;
-                border-radius: 28px;
+                border: 2px solid #229ED9;
+                border-radius: 20px;
             }
             QFrame#qrHeroFrame {
                 background: #ffffff;
-                border: 2px solid #cce8d6;
-                border-radius: 20px;
+                border: 1px solid #bae6fd;
+                border-radius: 16px;
             }
-            QLabel#eyebrow {
-                color: rgba(145, 226, 179, 0.92);
-                font-size: 14px;
+            QLabel#univEyebrow {
+                color: #fbbf24;
+                font-size: 11px;
                 font-weight: 800;
-                letter-spacing: 3px;
+                letter-spacing: 2px;
             }
             QLabel#dialogTitle {
-                color: #f4fbf6;
-                font-size: 32px;
+                color: #ffffff;
+                font-size: 26px;
                 font-weight: 900;
             }
             QLabel#dialogCopy {
-                color: rgba(230, 240, 234, 0.86);
-                font-size: 16px;
+                color: rgba(226, 241, 233, 0.78);
+                font-size: 14px;
+                font-weight: 500;
+            }
+            QLabel#ticketLabel {
+                color: rgba(167, 243, 208, 0.78);
+                font-size: 11px;
+                font-weight: 800;
+                letter-spacing: 2.2px;
             }
             QLabel#ticketNumber {
                 color: #ffffff;
-                font-size: 54px;
+                font-size: 52px;
                 font-weight: 900;
+                letter-spacing: 1px;
             }
-            QLabel#ticketLabel {
-                color: rgba(189, 224, 201, 0.86);
+            QLabel#purposePill {
+                background: rgba(16, 185, 129, 0.14);
+                color: #a7f3d0;
+                border: 1px solid rgba(16, 185, 129, 0.28);
+                border-radius: 12px;
+                padding: 6px 14px;
                 font-size: 13px;
                 font-weight: 700;
-                letter-spacing: 3px;
-            }
-            QLabel#waitTitle {
-                color: #f7fff8;
-                font-size: 24px;
-                font-weight: 900;
-            }
-            QLabel#waitCopy {
-                color: rgba(224, 235, 228, 0.8);
-                font-size: 15px;
             }
             QLabel#metaValue {
                 color: #ffffff;
                 font-size: 24px;
-                font-weight: 800;
+                font-weight: 900;
             }
             QLabel#metaLabel {
                 color: rgba(185, 212, 194, 0.72);
-                font-size: 11px;
-                font-weight: 700;
-                letter-spacing: 2px;
+                font-size: 10px;
+                font-weight: 800;
+                letter-spacing: 1.8px;
             }
-            QLabel#statusPill {
-                background: rgba(77, 211, 138, 0.16);
-                color: #9ff1bf;
-                border: 1px solid rgba(77, 211, 138, 0.35);
-                border-radius: 16px;
-                padding: 10px 18px;
-                font-size: 13px;
-                font-weight: 700;
-            }
-            QLabel#tgCardTag {
-                color: #0d7045;
+            QLabel#tgRequirementBadge {
+                background: rgba(34, 158, 217, 0.2);
+                color: #38bdf8;
+                border: 1px solid rgba(56, 189, 248, 0.45);
+                border-radius: 12px;
+                padding: 4px 12px;
                 font-size: 11px;
                 font-weight: 800;
-                letter-spacing: 2px;
+                letter-spacing: 1.6px;
             }
-            QLabel#tgCardTitle {
-                color: #083822;
+            QLabel#tgHeroTitle {
+                color: #ffffff;
                 font-size: 16px;
                 font-weight: 900;
             }
-            QLabel#tgStep {
-                color: #1b3d2b;
+            QLabel#tgHeroSubtitle {
+                color: rgba(186, 230, 253, 0.88);
+                font-size: 12px;
+                font-weight: 600;
+            }
+            QLabel#tgStepsPill {
+                color: #e2e8f0;
+                font-size: 11px;
+                font-weight: 700;
+                background: rgba(0, 0, 0, 0.28);
+                border-radius: 10px;
+                padding: 5px 12px;
+            }
+            QLabel#scanStatusPill {
+                background: rgba(16, 185, 129, 0.16);
+                color: #6ee7b7;
+                border: 1px solid rgba(16, 185, 129, 0.35);
+                border-radius: 12px;
+                padding: 6px 14px;
+                font-size: 11px;
+                font-weight: 800;
+            }
+            QLabel#waitLabel {
+                color: rgba(167, 243, 208, 0.78);
+                font-size: 11px;
+                font-weight: 800;
+                letter-spacing: 2px;
+            }
+            QLabel#waitTitle {
+                color: #ffffff;
+                font-size: 21px;
+                font-weight: 900;
+            }
+            QLabel#waitCopy {
+                color: rgba(226, 241, 233, 0.78);
+                font-size: 13px;
+                font-weight: 500;
+                line-height: 1.4;
+            }
+            QLabel#statusPill {
+                background: rgba(16, 185, 129, 0.14);
+                color: #a7f3d0;
+                border: 1px solid rgba(16, 185, 129, 0.28);
+                border-radius: 12px;
+                padding: 7px 14px;
                 font-size: 12px;
                 font-weight: 700;
             }
-            QLabel#scanStatusPill {
-                background: rgba(13, 112, 69, 0.12);
-                color: #0d7045;
-                border: 1px solid rgba(13, 112, 69, 0.3);
-                border-radius: 12px;
-                padding: 6px 14px;
-                font-size: 12px;
-                font-weight: 800;
-            }
             QPushButton#doneButton {
-                background: #4dd38a;
-                color: #082114;
+                background: #10b981;
+                color: #032114;
                 border: none;
-                border-radius: 18px;
-                padding: 14px 26px;
-                font-size: 17px;
+                border-radius: 16px;
+                padding: 12px 30px;
+                font-size: 15px;
                 font-weight: 900;
             }
             QPushButton#doneButton:hover {
-                background: #62e39b;
+                background: #34d399;
             }
             """
         )
 
         root_layout = QVBoxLayout(self)
-        root_layout.setContentsMargins(24, 24, 24, 24)
+        root_layout.setContentsMargins(18, 18, 18, 18)
 
         card = QFrame()
         card.setObjectName("dialogCard")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(30, 26, 30, 24)
-        card_layout.setSpacing(18)
+        card_layout.setContentsMargins(28, 22, 28, 20)
+        card_layout.setSpacing(14)
 
         top_row = QHBoxLayout()
-        top_row.setSpacing(18)
+        top_row.setSpacing(16)
 
         logo_label = QLabel()
         logo_pixmap = QPixmap(str(self.logo_source))
@@ -288,25 +324,26 @@ class TicketCreatedDialog(QDialog):
             logo_label.setPixmap(
                 logo_pixmap.scaled(52, 52, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
-        logo_label.setFixedSize(56, 56)
+        logo_label.setFixedSize(54, 54)
         logo_label.setAlignment(Qt.AlignCenter)
-        top_row.addWidget(logo_label, 0, Qt.AlignTop)
+        top_row.addWidget(logo_label, 0, Qt.AlignVCenter)
 
         title_col = QVBoxLayout()
-        title_col.setSpacing(4)
+        title_col.setSpacing(3)
 
-        eyebrow = QLabel("TICKET CONFIRMED")
-        eyebrow.setObjectName("eyebrow")
+        eyebrow = QLabel("OUR LADY OF FATIMA UNIVERSITY  •  STUDENT QUEUE MANAGEMENT")
+        eyebrow.setObjectName("univEyebrow")
         title_col.addWidget(eyebrow)
 
-        title = QLabel("Please wait for your number to be called")
+        title = QLabel("Ticket Confirmed • Please Wait in Waiting Area")
         title.setObjectName("dialogTitle")
-        title.setWordWrap(True)
         title_col.addWidget(title)
 
-        copy = QLabel(
-            "Your queue request has been saved. Stay near the display monitor and listen for your ticket number."
-        )
+        if self.telegram_offered:
+            copy_text = "Your ticket is confirmed in line. Scan the Telegram QR code below to connect phone alerts."
+        else:
+            copy_text = "Your ticket is confirmed in line. Please watch the lobby display and listen for your ticket number."
+        copy = QLabel(copy_text)
         copy.setObjectName("dialogCopy")
         copy.setWordWrap(True)
         title_col.addWidget(copy)
@@ -314,7 +351,7 @@ class TicketCreatedDialog(QDialog):
         card_layout.addLayout(top_row)
 
         center_row = QHBoxLayout()
-        center_row.setSpacing(20)
+        center_row.setSpacing(16)
 
         badge = self._build_ticket_badge()
         center_row.addWidget(badge, 2 if self.telegram_offered else 1)
@@ -330,10 +367,14 @@ class TicketCreatedDialog(QDialog):
         footer_row = QHBoxLayout()
         footer_row.setSpacing(16)
 
-        self.auto_close_hint = QLabel("⏱️ This screen closes automatically in 30s")
+        if self.telegram_offered:
+            hint_text = "⏱ Auto-closing in 30s • Take a photo or scan the Telegram QR"
+        else:
+            hint_text = "⏱ Auto-closing in 30s • Please remember your ticket number"
+        self.auto_close_hint = QLabel(hint_text)
         self.auto_close_hint.setObjectName("autoCloseHint")
         self.auto_close_hint.setStyleSheet(
-            "color: rgba(189, 224, 201, 0.85); font-size: 13px; font-weight: 700;"
+            "color: rgba(189, 224, 201, 0.78); font-size: 13px; font-weight: 600;"
         )
         footer_row.addWidget(self.auto_close_hint, 1)
 
@@ -351,7 +392,7 @@ class TicketCreatedDialog(QDialog):
         badge = QFrame()
         badge.setObjectName("ticketBadge")
         badge_layout = QVBoxLayout(badge)
-        badge_layout.setContentsMargins(24, 20, 24, 20)
+        badge_layout.setContentsMargins(20, 16, 20, 16)
         badge_layout.setSpacing(8)
 
         ticket_label = QLabel("YOUR TICKET")
@@ -364,18 +405,19 @@ class TicketCreatedDialog(QDialog):
         ticket_number.setAlignment(Qt.AlignCenter)
         badge_layout.addWidget(ticket_number)
 
-        purpose_label = QLabel(self.purpose)
-        purpose_label.setObjectName("dialogCopy")
-        purpose_label.setAlignment(Qt.AlignCenter)
-        badge_layout.addWidget(purpose_label)
+        purpose_pill = QLabel(f"📌 {self.purpose}")
+        purpose_pill.setObjectName("purposePill")
+        purpose_pill.setAlignment(Qt.AlignCenter)
+        purpose_pill.setWordWrap(True)
+        badge_layout.addWidget(purpose_pill)
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
-        sep.setStyleSheet("background: rgba(255, 255, 255, 0.12); margin: 6px 0;")
+        sep.setStyleSheet("background: rgba(255, 255, 255, 0.08); margin: 6px 0;")
         badge_layout.addWidget(sep)
 
         meta_row = QHBoxLayout()
-        meta_row.setSpacing(12)
+        meta_row.setSpacing(10)
         meta_row.addWidget(self._build_meta_block(str(self.queue_position), "QUEUE POSITION"))
         meta_row.addWidget(
             self._build_meta_block(self.ticket.get("visitor_type", "Student"), "VISITOR TYPE")
@@ -387,36 +429,41 @@ class TicketCreatedDialog(QDialog):
 
     def _build_telegram_card(self) -> "QFrame | None":
         """Hero scan-to-link QR centerpiece with instant scanning and live connection status."""
-        qr_pixmap = generate_telegram_qr_pixmap(self.ticket["ticket_number"], size=210)
+        qr_pixmap = generate_telegram_qr_pixmap(self.ticket["ticket_number"], size=195)
         if qr_pixmap is None or qr_pixmap.isNull():
             return None
 
         card = QFrame()
         card.setObjectName("telegramHeroCard")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(20, 16, 20, 16)
-        card_layout.setSpacing(8)
+        card_layout.setContentsMargins(18, 14, 18, 14)
+        card_layout.setSpacing(6)
 
-        tag_label = QLabel("📱 INSTANT PHONE NOTIFICATIONS")
-        tag_label.setObjectName("tgCardTag")
+        tag_label = QLabel("✈️ TELEGRAM QUEUE ALERTS REQUIRED")
+        tag_label.setObjectName("tgRequirementBadge")
         tag_label.setAlignment(Qt.AlignCenter)
-        card_layout.addWidget(tag_label)
+        card_layout.addWidget(tag_label, 0, Qt.AlignCenter)
 
-        title = QLabel("SCAN FOR REAL-TIME ALERTS")
-        title.setObjectName("tgCardTitle")
+        title = QLabel("Scan to Link Your Telegram")
+        title.setObjectName("tgHeroTitle")
         title.setAlignment(Qt.AlignCenter)
         card_layout.addWidget(title)
+
+        sub = QLabel("Receive instant push alerts when your number is called")
+        sub.setObjectName("tgHeroSubtitle")
+        sub.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(sub)
 
         qr_frame = QFrame()
         qr_frame.setObjectName("qrHeroFrame")
         qr_frame_layout = QVBoxLayout(qr_frame)
-        qr_frame_layout.setContentsMargins(8, 8, 8, 8)
+        qr_frame_layout.setContentsMargins(6, 6, 6, 6)
         qr_frame_layout.setAlignment(Qt.AlignCenter)
 
         qr_img = QLabel()
         qr_img.setPixmap(qr_pixmap)
         qr_img.setAlignment(Qt.AlignCenter)
-        qr_img.setFixedSize(210, 210)
+        qr_img.setFixedSize(195, 195)
         qr_frame_layout.addWidget(qr_img)
         card_layout.addWidget(qr_frame, 0, Qt.AlignCenter)
 
@@ -442,12 +489,12 @@ class TicketCreatedDialog(QDialog):
 
         qr_frame.mousePressEvent = _on_qr_click
 
-        steps = QLabel("1. Point camera at QR  •  2. Tap START in Telegram")
-        steps.setObjectName("tgStep")
+        steps = QLabel("① Scan with camera   ➔   ② Tap 'Start' in Telegram")
+        steps.setObjectName("tgStepsPill")
         steps.setAlignment(Qt.AlignCenter)
-        card_layout.addWidget(steps)
+        card_layout.addWidget(steps, 0, Qt.AlignCenter)
 
-        self.scan_status_pill = QLabel("🟢 Scanner active • Waiting for scan...")
+        self.scan_status_pill = QLabel("🟢 Scanner active • Waiting for Telegram scan...")
         self.scan_status_pill.setObjectName("scanStatusPill")
         self.scan_status_pill.setAlignment(Qt.AlignCenter)
         card_layout.addWidget(self.scan_status_pill, 0, Qt.AlignCenter)
@@ -460,10 +507,14 @@ class TicketCreatedDialog(QDialog):
         detail_panel = QFrame()
         detail_panel.setObjectName("detailPanel")
         detail_layout = QVBoxLayout(detail_panel)
-        detail_layout.setContentsMargins(24, 20, 24, 20)
-        detail_layout.setSpacing(10)
+        detail_layout.setContentsMargins(20, 16, 20, 16)
+        detail_layout.setSpacing(8)
 
-        wait_title = QLabel("Now in waiting queue")
+        wait_label = QLabel("LOBBY MONITOR")
+        wait_label.setObjectName("waitLabel")
+        detail_layout.addWidget(wait_label)
+
+        wait_title = QLabel("Now in Waiting Queue")
         wait_title.setObjectName("waitTitle")
         wait_title.setWordWrap(True)
         detail_layout.addWidget(wait_title)
@@ -471,19 +522,12 @@ class TicketCreatedDialog(QDialog):
         signal_animation = WaitingSignalAnimation()
         detail_layout.addWidget(signal_animation, 0, Qt.AlignLeft)
 
-        wait_copy = QLabel("Please watch the lobby display and listen for your number.")
+        wait_copy = QLabel(
+            "Please watch the lobby display screen and listen for the audio chime when your ticket is called."
+        )
         wait_copy.setObjectName("waitCopy")
         wait_copy.setWordWrap(True)
         detail_layout.addWidget(wait_copy)
-
-        if not self.telegram_offered:
-            meta_row = QHBoxLayout()
-            meta_row.setSpacing(18)
-            meta_row.addWidget(self._build_meta_block(str(self.queue_position), "QUEUE POSITION"))
-            meta_row.addWidget(
-                self._build_meta_block(self.ticket.get("visitor_type", "Student"), "VISITOR TYPE")
-            )
-            detail_layout.addLayout(meta_row)
 
         status_notes = []
         if self.email_sent:
@@ -492,17 +536,19 @@ class TicketCreatedDialog(QDialog):
             status_notes.append("SMS dispatched")
         if self.telegram_sent:
             status_notes.append("Telegram alert sent")
+
         if status_notes:
             status_text = " • ".join(status_notes) + " successfully."
         elif self.telegram_offered:
-            status_text = "Free Telegram alerts active on scan."
+            status_text = "✓ Live Telegram Alerts Ready on Scan"
         else:
-            status_text = "Digital ticket ready on this screen."
+            status_text = "✓ Digital Ticket Confirmed on Screen"
+
         status_pill = QLabel(status_text)
         status_pill.setObjectName("statusPill")
         status_pill.setAlignment(Qt.AlignCenter)
         status_pill.setWordWrap(True)
-        detail_layout.addWidget(status_pill, 0, Qt.AlignLeft)
+        detail_layout.addWidget(status_pill)
 
         detail_layout.addStretch(1)
         return detail_panel
@@ -517,7 +563,7 @@ class TicketCreatedDialog(QDialog):
             width = min(width, int(available.width() * 0.94))
             height = min(height, int(available.height() * 0.92))
         min_w = 980 if self.telegram_offered else 840
-        min_h = 580
+        min_h = 630
         self.resize(max(width, min_w), max(height, min_h))
         self.setMinimumSize(min_w, min_h)
 
@@ -525,14 +571,16 @@ class TicketCreatedDialog(QDialog):
         block = QFrame()
         layout = QVBoxLayout(block)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(3)
 
         value_label = QLabel(value)
         value_label.setObjectName("metaValue")
+        value_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(value_label)
 
         text_label = QLabel(label_text)
         text_label.setObjectName("metaLabel")
+        text_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(text_label)
         return block
 
