@@ -573,6 +573,68 @@ class DatabaseManager:
             "average_wait_time": 0,
         })
 
+    def reset_queue_data(self) -> Dict[str, Any]:
+        """
+        Safely reset and clean all test queue entries (tickets, wait queues, counter assignments,
+        and wait-time statistics) while strictly retaining all settings data and admin credentials.
+        """
+        with self._connect() as conn:
+            # 1. Count deleted tickets
+            tickets_count = conn.execute("SELECT COUNT(*) FROM tickets").fetchone()[0]
+            conn.execute("DELETE FROM tickets")
+
+            # 2. Reset autoincrement sequence if sqlite_sequence exists
+            try:
+                conn.execute("DELETE FROM sqlite_sequence WHERE name = 'tickets'")
+            except sqlite3.OperationalError:
+                pass
+
+            # 3. Reset all counter states to available with no active ticket
+            conn.execute("UPDATE counters SET status = 'available', current_ticket = NULL")
+
+            # 4. Reset queue statistics
+            conn.execute(
+                "UPDATE statistics SET value = 0.0 WHERE key IN ('total_served', 'total_wait_time', 'average_wait_time')"
+            )
+
+            # 5. Flush WAL and checkpoint
+            try:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                pass
+
+        # 6. Reset legacy JSON file if it exists
+        legacy_path = self.db_file.parent / "queue_db.json"
+        if not legacy_path.exists() and self.db_file == DB_PATH:
+            legacy_path = LEGACY_JSON_PATH
+        if legacy_path.exists():
+            try:
+                with open(legacy_path, "r", encoding="utf-8") as f:
+                    legacy_data = json.load(f)
+                legacy_data["waiting_queue"] = []
+                legacy_data["served_tickets"] = []
+                legacy_data["current_ticket"] = None
+                legacy_data["statistics"] = {
+                    "total_served": 0,
+                    "total_wait_time": 0.0,
+                    "average_wait_time": 0.0,
+                }
+                if "counters" in legacy_data:
+                    for counter in legacy_data["counters"]:
+                        counter["status"] = "available"
+                        if "current_ticket" in counter:
+                            counter["current_ticket"] = None
+                with open(legacy_path, "w", encoding="utf-8") as f:
+                    json.dump(legacy_data, f, indent=2)
+            except Exception as e:
+                logger.warning(f"Failed to reset legacy JSON: {e}")
+
+        logger.info(f"Safe reset completed: {tickets_count} tickets purged.")
+        return {
+            "tickets_purged": tickets_count,
+            "status": "success",
+        }
+
     # ==================== App Settings ====================
 
     def get_app_settings(self) -> Dict[str, Any]:

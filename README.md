@@ -252,6 +252,24 @@ Administrative portals (**Staff Service Desk** and **Super Admin Dashboard**) re
 > python set_admin_password.py super_admin new_admin_user MasterPass2026!
 > ```
 
+### 🧹 Safe Local Data & Queue Reset Command
+
+To quickly purge all test tickets, reset active queue counters, and reset statistics to zero before demonstrations without touching configuration or credentials:
+
+```bash
+# Interactive prompt (asks confirmation before purging):
+python reset_queue_data.py
+
+# Non-interactive / Scripted immediate clean:
+python reset_queue_data.py --yes
+# (Or alias: python clean_data.py -y)
+
+# Windows one-click batch launcher:
+reset_queue_data.bat
+```
+
+> **Safety Guarantee:** The reset script clears only transient queue entries (`tickets` table, counter assignments, and queue wait times). It **strictly preserves** staff/admin credentials (`data/admin_users.json`) and system configuration/API settings (`settings` table in `data/kiosk.db`).
+
 ---
 
 ## 📱 SMS Notification Subsystem
