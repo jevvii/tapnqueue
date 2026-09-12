@@ -1,7 +1,4 @@
-"""
-Dialog Components for TapNQue (Ticket Confirmation & Service History).
-"""
-
+import logging
 from datetime import datetime
 from typing import List, Dict, Any
 
@@ -20,17 +17,20 @@ from PySide6.QtWidgets import (
 )
 
 from tapnque.config import get_asset_path
+from tapnque.core.database import get_database
 from tapnque.services.telegram_service import generate_telegram_qr_pixmap
 from tapnque.ui.components.animations import WaitingSignalAnimation
+
+logger = logging.getLogger("tapnque.dialogs")
 
 
 class TicketCreatedDialog(QDialog):
     """Branded success modal shown after student registration.
 
-    Layout is fully adaptive: content is built first, then the dialog sizes
-    itself from its sizeHint clamped to the available screen geometry, so the
-    QR code and all fields render without squashing or overlap on both small
-    Windows laptops (1366x768 or 125% display scaling) and Linux displays.
+    Features:
+    - Adaptive layout with the Telegram QR code positioned as the Hero centerpiece.
+    - Automatic 30-second countdown timer with live UI countdown display.
+    - Real-time polling to detect successful QR scan and close the dialog immediately.
     """
 
     def __init__(
@@ -53,14 +53,83 @@ class TicketCreatedDialog(QDialog):
         self.telegram_sent = telegram_sent
         self.telegram_offered = telegram_offered
         self.logo_source = get_asset_path("OLFU LOGO 1.png")
+
+        self.db = get_database()
+        self.ticket_number = ticket.get("ticket_number", 0)
+        self.remaining_seconds = 30
+        self._is_closing = False
+
         self._setup_ui()
         self._finalize_sizing()
 
-        self.close_timer = QTimer(self)
-        self.close_timer.setSingleShot(True)
-        self.close_timer.timeout.connect(self.accept)
-        # 15s gives first-time users enough time to scan the QR and tap START.
-        self.close_timer.start(15000)
+        # 30-second countdown timer
+        self.countdown_timer = QTimer(self)
+        self.countdown_timer.setInterval(1000)
+        self.countdown_timer.timeout.connect(self._on_countdown_tick)
+        self.countdown_timer.start()
+
+        # Fast background poller to detect QR scan completion immediately
+        if self.telegram_offered:
+            self.scan_poll_timer = QTimer(self)
+            self.scan_poll_timer.setInterval(400)
+            self.scan_poll_timer.timeout.connect(self._check_qr_scanned)
+            self.scan_poll_timer.start()
+
+    def _on_countdown_tick(self):
+        self.remaining_seconds -= 1
+        self._update_countdown_display()
+        if self.remaining_seconds <= 0:
+            self._stop_timers()
+            self.accept()
+
+    def _update_countdown_display(self):
+        if hasattr(self, "auto_close_hint") and self.auto_close_hint is not None:
+            self.auto_close_hint.setText(
+                f"⏱️ This screen closes automatically in {self.remaining_seconds}s"
+            )
+        if hasattr(self, "done_button") and self.done_button is not None:
+            self.done_button.setText(f"DONE ({self.remaining_seconds}s)")
+
+    def _check_qr_scanned(self):
+        if not self.telegram_offered or self._is_closing:
+            return
+        try:
+            status = self.db.get_ticket_telegram_status(self.ticket_number)
+            if status and status.get("telegram_chat_id"):
+                logger.info(
+                    "QR scan verified for ticket #%04d (Chat ID: %s). Closing screen immediately.",
+                    self.ticket_number,
+                    status.get("telegram_chat_id"),
+                )
+                self._stop_timers()
+                self._is_closing = True
+                if hasattr(self, "scan_status_pill") and self.scan_status_pill is not None:
+                    self.scan_status_pill.setText("✅ QR Scanned! Connecting...")
+                    self.scan_status_pill.setStyleSheet(
+                        "background: #105938; color: #ffffff; border: 1px solid #4dd38a; "
+                        "border-radius: 12px; padding: 6px 14px; font-size: 12px; font-weight: 800;"
+                    )
+                self.accept()
+        except Exception as exc:
+            logger.debug("Error checking QR scan status: %s", exc)
+
+    def _stop_timers(self):
+        if hasattr(self, "countdown_timer") and self.countdown_timer.isActive():
+            self.countdown_timer.stop()
+        if hasattr(self, "scan_poll_timer") and self.scan_poll_timer.isActive():
+            self.scan_poll_timer.stop()
+
+    def accept(self):
+        self._stop_timers()
+        super().accept()
+
+    def reject(self):
+        self._stop_timers()
+        super().reject()
+
+    def closeEvent(self, event):
+        self._stop_timers()
+        super().closeEvent(event)
 
     def _setup_ui(self):
         self.setWindowTitle("Ticket Created")
@@ -92,10 +161,19 @@ class TicketCreatedDialog(QDialog):
                 border: 1px solid rgba(255, 255, 255, 0.08);
                 border-radius: 24px;
             }
-            QFrame#telegramCard {
-                background: #f4faf6;
-                border: 1px solid rgba(255, 255, 255, 0.14);
-                border-radius: 24px;
+            QFrame#telegramHeroCard {
+                background: qlineargradient(
+                    x1: 0, y1: 0, x2: 1, y2: 1,
+                    stop: 0 #f7fdf9,
+                    stop: 1 #eef8f2
+                );
+                border: 2px solid #4dd38a;
+                border-radius: 28px;
+            }
+            QFrame#qrHeroFrame {
+                background: #ffffff;
+                border: 2px solid #cce8d6;
+                border-radius: 20px;
             }
             QLabel#eyebrow {
                 color: rgba(145, 226, 179, 0.92);
@@ -114,7 +192,7 @@ class TicketCreatedDialog(QDialog):
             }
             QLabel#ticketNumber {
                 color: #ffffff;
-                font-size: 60px;
+                font-size: 54px;
                 font-weight: 900;
             }
             QLabel#ticketLabel {
@@ -134,12 +212,12 @@ class TicketCreatedDialog(QDialog):
             }
             QLabel#metaValue {
                 color: #ffffff;
-                font-size: 26px;
+                font-size: 24px;
                 font-weight: 800;
             }
             QLabel#metaLabel {
                 color: rgba(185, 212, 194, 0.72);
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 700;
                 letter-spacing: 2px;
             }
@@ -152,18 +230,30 @@ class TicketCreatedDialog(QDialog):
                 font-size: 13px;
                 font-weight: 700;
             }
+            QLabel#tgCardTag {
+                color: #0d7045;
+                font-size: 11px;
+                font-weight: 800;
+                letter-spacing: 2px;
+            }
             QLabel#tgCardTitle {
-                color: #0b5d3b;
-                font-size: 15px;
+                color: #083822;
+                font-size: 16px;
                 font-weight: 900;
             }
             QLabel#tgStep {
-                color: #294032;
-                font-size: 13px;
-            }
-            QLabel#tgFallback {
-                color: #5a6f60;
+                color: #1b3d2b;
                 font-size: 12px;
+                font-weight: 700;
+            }
+            QLabel#scanStatusPill {
+                background: rgba(13, 112, 69, 0.12);
+                color: #0d7045;
+                border: 1px solid rgba(13, 112, 69, 0.3);
+                border-radius: 12px;
+                padding: 6px 14px;
+                font-size: 12px;
+                font-weight: 800;
             }
             QPushButton#doneButton {
                 background: #4dd38a;
@@ -195,7 +285,9 @@ class TicketCreatedDialog(QDialog):
         logo_label = QLabel()
         logo_pixmap = QPixmap(str(self.logo_source))
         if not logo_pixmap.isNull():
-            logo_label.setPixmap(logo_pixmap.scaled(52, 52, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            logo_label.setPixmap(
+                logo_pixmap.scaled(52, 52, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
         logo_label.setFixedSize(56, 56)
         logo_label.setAlignment(Qt.AlignCenter)
         top_row.addWidget(logo_label, 0, Qt.AlignTop)
@@ -224,10 +316,42 @@ class TicketCreatedDialog(QDialog):
         center_row = QHBoxLayout()
         center_row.setSpacing(20)
 
+        badge = self._build_ticket_badge()
+        center_row.addWidget(badge, 2 if self.telegram_offered else 1)
+
+        if self.telegram_offered:
+            telegram_card = self._build_telegram_card()
+            if telegram_card is not None:
+                center_row.addWidget(telegram_card, 3)
+
+        center_row.addWidget(self._build_detail_panel(), 2 if self.telegram_offered else 1)
+        card_layout.addLayout(center_row)
+
+        footer_row = QHBoxLayout()
+        footer_row.setSpacing(16)
+
+        self.auto_close_hint = QLabel("⏱️ This screen closes automatically in 30s")
+        self.auto_close_hint.setObjectName("autoCloseHint")
+        self.auto_close_hint.setStyleSheet(
+            "color: rgba(189, 224, 201, 0.85); font-size: 13px; font-weight: 700;"
+        )
+        footer_row.addWidget(self.auto_close_hint, 1)
+
+        self.done_button = QPushButton("DONE (30s)")
+        self.done_button.setObjectName("doneButton")
+        self.done_button.setCursor(Qt.PointingHandCursor)
+        self.done_button.clicked.connect(self.accept)
+        footer_row.addWidget(self.done_button)
+        card_layout.addLayout(footer_row)
+
+        root_layout.addWidget(card)
+
+    def _build_ticket_badge(self) -> QFrame:
+        """Left panel displaying ticket number, purpose, and position."""
         badge = QFrame()
         badge.setObjectName("ticketBadge")
         badge_layout = QVBoxLayout(badge)
-        badge_layout.setContentsMargins(26, 22, 26, 22)
+        badge_layout.setContentsMargins(24, 20, 24, 20)
         badge_layout.setSpacing(8)
 
         ticket_label = QLabel("YOUR TICKET")
@@ -245,40 +369,99 @@ class TicketCreatedDialog(QDialog):
         purpose_label.setAlignment(Qt.AlignCenter)
         badge_layout.addWidget(purpose_label)
 
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet("background: rgba(255, 255, 255, 0.12); margin: 6px 0;")
+        badge_layout.addWidget(sep)
+
+        meta_row = QHBoxLayout()
+        meta_row.setSpacing(12)
+        meta_row.addWidget(self._build_meta_block(str(self.queue_position), "QUEUE POSITION"))
+        meta_row.addWidget(
+            self._build_meta_block(self.ticket.get("visitor_type", "Student"), "VISITOR TYPE")
+        )
+        badge_layout.addLayout(meta_row)
+
         badge_layout.addStretch(1)
-        center_row.addWidget(badge, 1)
+        return badge
 
-        center_row.addWidget(self._build_detail_panel(), 1)
+    def _build_telegram_card(self) -> "QFrame | None":
+        """Hero scan-to-link QR centerpiece with instant scanning and live connection status."""
+        qr_pixmap = generate_telegram_qr_pixmap(self.ticket["ticket_number"], size=210)
+        if qr_pixmap is None or qr_pixmap.isNull():
+            return None
 
-        if self.telegram_offered:
-            telegram_card = self._build_telegram_card()
-            if telegram_card is not None:
-                center_row.addWidget(telegram_card, 1)
+        card = QFrame()
+        card.setObjectName("telegramHeroCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 16, 20, 16)
+        card_layout.setSpacing(8)
 
-        card_layout.addLayout(center_row)
+        tag_label = QLabel("📱 INSTANT PHONE NOTIFICATIONS")
+        tag_label.setObjectName("tgCardTag")
+        tag_label.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(tag_label)
 
-        footer_row = QHBoxLayout()
-        footer_row.setSpacing(16)
+        title = QLabel("SCAN FOR REAL-TIME ALERTS")
+        title.setObjectName("tgCardTitle")
+        title.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(title)
 
-        auto_close_hint = QLabel("This screen closes automatically in 15 seconds.")
-        auto_close_hint.setStyleSheet("color: rgba(189, 224, 201, 0.6); font-size: 12px;")
-        footer_row.addWidget(auto_close_hint, 1)
+        qr_frame = QFrame()
+        qr_frame.setObjectName("qrHeroFrame")
+        qr_frame_layout = QVBoxLayout(qr_frame)
+        qr_frame_layout.setContentsMargins(8, 8, 8, 8)
+        qr_frame_layout.setAlignment(Qt.AlignCenter)
 
-        done_button = QPushButton("DONE")
-        done_button.setObjectName("doneButton")
-        done_button.setCursor(Qt.PointingHandCursor)
-        done_button.clicked.connect(self.accept)
-        footer_row.addWidget(done_button)
-        card_layout.addLayout(footer_row)
+        qr_img = QLabel()
+        qr_img.setPixmap(qr_pixmap)
+        qr_img.setAlignment(Qt.AlignCenter)
+        qr_img.setFixedSize(210, 210)
+        qr_frame_layout.addWidget(qr_img)
+        card_layout.addWidget(qr_frame, 0, Qt.AlignCenter)
 
-        root_layout.addWidget(card)
+        # Allow clicking QR to simulate scan during defense demo or testing
+        qr_frame.setCursor(Qt.PointingHandCursor)
+
+        def _on_qr_click(event):
+            del event
+            try:
+                settings = self.db.get_telegram_settings()
+                is_mock = settings.get("telegram_mock_mode", True)
+                if is_mock or not settings.get("telegram_bot_token"):
+                    self.db.bind_telegram_chat_id(self.ticket_number, "mock_student_scan")
+                    from tapnque.services.telegram_service import send_ticket_created_telegram
+
+                    linked_ticket = dict(self.ticket)
+                    linked_ticket["telegram_chat_id"] = "mock_student_scan"
+                    send_ticket_created_telegram(linked_ticket, self.queue_position)
+                    logger.info("Mock QR scan simulated on click for ticket #%04d", self.ticket_number)
+            except Exception as exc:
+                logger.debug("QR click trigger exception: %s", exc)
+            self._check_qr_scanned()
+
+        qr_frame.mousePressEvent = _on_qr_click
+
+        steps = QLabel("1. Point camera at QR  •  2. Tap START in Telegram")
+        steps.setObjectName("tgStep")
+        steps.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(steps)
+
+        self.scan_status_pill = QLabel("🟢 Scanner active • Waiting for scan...")
+        self.scan_status_pill.setObjectName("scanStatusPill")
+        self.scan_status_pill.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(self.scan_status_pill, 0, Qt.AlignCenter)
+
+        card_layout.addStretch(1)
+        return card
 
     def _build_detail_panel(self) -> QFrame:
+        """Right panel displaying waiting queue guidance and status."""
         detail_panel = QFrame()
         detail_panel.setObjectName("detailPanel")
         detail_layout = QVBoxLayout(detail_panel)
-        detail_layout.setContentsMargins(24, 22, 24, 22)
-        detail_layout.setSpacing(12)
+        detail_layout.setContentsMargins(24, 20, 24, 20)
+        detail_layout.setSpacing(10)
 
         wait_title = QLabel("Now in waiting queue")
         wait_title.setObjectName("waitTitle")
@@ -288,16 +471,19 @@ class TicketCreatedDialog(QDialog):
         signal_animation = WaitingSignalAnimation()
         detail_layout.addWidget(signal_animation, 0, Qt.AlignLeft)
 
-        wait_copy = QLabel("Please wait for your number to be called on screen.")
+        wait_copy = QLabel("Please watch the lobby display and listen for your number.")
         wait_copy.setObjectName("waitCopy")
         wait_copy.setWordWrap(True)
         detail_layout.addWidget(wait_copy)
 
-        meta_row = QHBoxLayout()
-        meta_row.setSpacing(18)
-        meta_row.addWidget(self._build_meta_block(str(self.queue_position), "QUEUE POSITION"))
-        meta_row.addWidget(self._build_meta_block(self.ticket.get("visitor_type", "Student"), "VISITOR TYPE"))
-        detail_layout.addLayout(meta_row)
+        if not self.telegram_offered:
+            meta_row = QHBoxLayout()
+            meta_row.setSpacing(18)
+            meta_row.addWidget(self._build_meta_block(str(self.queue_position), "QUEUE POSITION"))
+            meta_row.addWidget(
+                self._build_meta_block(self.ticket.get("visitor_type", "Student"), "VISITOR TYPE")
+            )
+            detail_layout.addLayout(meta_row)
 
         status_notes = []
         if self.email_sent:
@@ -309,7 +495,7 @@ class TicketCreatedDialog(QDialog):
         if status_notes:
             status_text = " • ".join(status_notes) + " successfully."
         elif self.telegram_offered:
-            status_text = "Ticket ready. Scan the QR for free phone alerts."
+            status_text = "Free Telegram alerts active on scan."
         else:
             status_text = "Digital ticket ready on this screen."
         status_pill = QLabel(status_text)
@@ -321,55 +507,6 @@ class TicketCreatedDialog(QDialog):
         detail_layout.addStretch(1)
         return detail_panel
 
-    def _build_telegram_card(self) -> "QFrame | None":
-        """Scan-to-link QR card with zero-typing onboarding steps."""
-        qr_pixmap = generate_telegram_qr_pixmap(self.ticket["ticket_number"], size=150)
-        if qr_pixmap is None or qr_pixmap.isNull():
-            return None
-
-        card = QFrame()
-        card.setObjectName("telegramCard")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(18, 16, 18, 16)
-        card_layout.setSpacing(8)
-
-        title = QLabel("GET FREE PHONE ALERTS\n(OPTIONAL)")
-        title.setObjectName("tgCardTitle")
-        title.setAlignment(Qt.AlignCenter)
-        card_layout.addWidget(title)
-
-        qr_frame = QFrame()
-        qr_frame.setStyleSheet("background: #ffffff; border: 1px solid #d7e3d8; border-radius: 14px;")
-        qr_frame_layout = QVBoxLayout(qr_frame)
-        qr_frame_layout.setContentsMargins(8, 8, 8, 8)
-        qr_img = QLabel()
-        qr_img.setPixmap(qr_pixmap)
-        qr_img.setAlignment(Qt.AlignCenter)
-        # Fixed size so the QR can never be squashed by vertical space pressure.
-        qr_img.setFixedSize(150, 150)
-        qr_frame_layout.addWidget(qr_img)
-        card_layout.addWidget(qr_frame, 0, Qt.AlignCenter)
-
-        steps = QLabel(
-            "1. Point your phone camera at the code\n"
-            "2. Telegram opens — just tap START\n"
-            "3. You're linked! Alerts arrive\n"
-            "automatically, no typing needed"
-        )
-        steps.setObjectName("tgStep")
-        card_layout.addWidget(steps)
-
-        fallback = QLabel(
-            "No Telegram app yet? The scan opens a page to install it in one tap — "
-            "or simply watch the lobby monitor; your number will be called either way."
-        )
-        fallback.setObjectName("tgFallback")
-        fallback.setWordWrap(True)
-        card_layout.addWidget(fallback)
-
-        card_layout.addStretch(1)
-        return card
-
     def _finalize_sizing(self):
         """Size the dialog from its content, clamped to the usable screen."""
         self.adjustSize()
@@ -379,8 +516,10 @@ class TicketCreatedDialog(QDialog):
             available = screen.availableGeometry()
             width = min(width, int(available.width() * 0.94))
             height = min(height, int(available.height() * 0.92))
-        self.resize(width, height)
-        self.setMinimumSize(min(width, 860), min(height, 580))
+        min_w = 980 if self.telegram_offered else 840
+        min_h = 580
+        self.resize(max(width, min_w), max(height, min_h))
+        self.setMinimumSize(min_w, min_h)
 
     def _build_meta_block(self, value: str, label_text: str):
         block = QFrame()
