@@ -532,13 +532,14 @@ class TicketCreatedDialog(QDialog):
         status_notes = []
         if self.email_sent:
             status_notes.append("Email sent")
-        if self.sms_sent:
-            status_notes.append("SMS dispatched")
         if self.telegram_sent:
             status_notes.append("Telegram alert sent")
 
         if status_notes:
-            status_text = " • ".join(status_notes) + " successfully."
+            if self.telegram_offered and not self.telegram_sent:
+                status_text = " • ".join(status_notes) + " successfully • Live Telegram Alerts Ready on Scan"
+            else:
+                status_text = " • ".join(status_notes) + " successfully."
         elif self.telegram_offered:
             status_text = "✓ Live Telegram Alerts Ready on Scan"
         else:

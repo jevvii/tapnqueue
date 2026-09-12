@@ -186,6 +186,47 @@ class TestDatabaseManager(unittest.TestCase):
         status_info = self.db.get_ticket_telegram_status(ticket["ticket_number"])
         self.assertEqual(status_info["telegram_ticket_status"], "sent")
 
+    def test_reset_queue_data_preserves_settings(self):
+        """Verify reset_queue_data purges all tickets and counters while strictly preserving settings."""
+        # 1. Custom settings
+        self.db.set_setting("custom_test_key", "custom_test_value")
+        self.db.set_sms_api_key("test_api_key_12345")
+
+        # 2. Create tickets and update counters & statistics
+        t1 = self.db.create_ticket("Student A", "101", "a@test.com", "", "Inquiry")
+        t2 = self.db.create_ticket("Student B", "102", "b@test.com", "", "Payment")
+        self.db.call_next_ticket(1)
+        self.db.mark_ticket_done(t1["ticket_number"])
+
+        # Check pre-reset state
+        self.assertGreater(len(self.db.get_served_tickets()), 0)
+        self.assertEqual(self.db.get_counter(1)["status"], "available")
+        stats_before = self.db.get_statistics()
+        self.assertEqual(stats_before["total_served"], 1)
+
+        # 3. Perform safe queue data reset
+        result = self.db.reset_queue_data()
+        self.assertGreaterEqual(result["tickets_purged"], 1)
+
+        # 4. Verify post-reset queue state
+        self.assertEqual(len(self.db.get_waiting_queue()), 0)
+        self.assertEqual(len(self.db.get_served_tickets()), 0)
+        for counter in self.db.get_counters():
+            self.assertEqual(counter["status"], "available")
+            self.assertIsNone(counter["current_ticket"])
+
+        stats_after = self.db.get_statistics()
+        self.assertEqual(stats_after["total_served"], 0)
+        self.assertEqual(stats_after["average_wait_time"], 0.0)
+
+        # 5. Verify settings are strictly preserved
+        self.assertEqual(self.db.get_setting("custom_test_key"), "custom_test_value")
+        self.assertEqual(self.db.get_sms_settings()["sms_api_key"], "test_api_key_12345")
+
+        # 6. Verify sequential numbering restarts at 1
+        t_new = self.db.create_ticket("New Student", "201", "", "", "New Reg")
+        self.assertEqual(t_new["ticket_number"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
