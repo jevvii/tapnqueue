@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from tapnque.config import SMS_GATEWAY_URL
 from tapnque.core.database import get_database
+from tapnque.services.telegram_service import robust_urlopen
 
 logger = logging.getLogger("tapnque.sms")
 
@@ -133,7 +134,7 @@ def send_via_gateway(
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
+        with robust_urlopen(req, timeout=timeout) as response:
             body = response.read().decode("utf-8")
             logger.info("Cloud SMS API response: %s", body)
             return True, "sent", body
