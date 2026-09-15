@@ -8,6 +8,7 @@ import json
 import logging
 import queue
 import re
+import ssl
 import threading
 import time
 import urllib.error
@@ -23,12 +24,77 @@ from tapnque.config import (
     DEFAULT_TELEGRAM_TEMPLATE_CALLED,
     DEFAULT_TELEGRAM_TEMPLATE_COMPLETED,
     DEFAULT_TELEGRAM_TEMPLATE_CREATED,
+    SSL_VERIFY_ENABLED,
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_BOT_USERNAME,
 )
 from tapnque.core.database import get_database
 
 logger = logging.getLogger("tapnque.telegram")
+
+# ==================== SSL Context & Resilient Network Client ====================
+
+def _get_ssl_context(allow_unverified: bool = False) -> ssl.SSLContext:
+    """
+    Get an SSLContext for HTTPS requests.
+    Attempts standard verified SSL first. If allow_unverified is True (or TAPNQUE_SSL_VERIFY=0),
+    creates an SSLContext that disables certificate verification for environments with
+    self-signed SSL inspection proxies, school firewalls, or antivirus interceptors.
+    """
+    if allow_unverified or not SSL_VERIFY_ENABLED:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
+
+def _is_ssl_verification_error(exc: Any) -> bool:
+    """Check if an exception or its reason is caused by SSL certificate verification failure."""
+    if isinstance(exc, ssl.SSLCertVerificationError):
+        return True
+    err_str = str(exc).lower()
+    return (
+        "certificate verify failed" in err_str
+        or "self-signed certificate" in err_str
+        or "certificate_verify_failed" in err_str
+    )
+
+
+def robust_urlopen(req: urllib.request.Request, timeout: int = 10):
+    """
+    Execute urllib.request.urlopen with automatic fallback for SSL interception proxies.
+    Attempts standard verified SSL first. If the local network, school Wi-Fi, or antivirus
+    intercepts HTTPS with a self-signed certificate, it automatically retries with
+    an unverified context so operations continue uninterrupted.
+    """
+    try:
+        return urllib.request.urlopen(
+            req,
+            timeout=timeout,
+            context=_get_ssl_context(allow_unverified=False),
+        )
+    except urllib.error.HTTPError:
+        # Re-raise HTTP error (401, 404, etc.) for direct caller handling
+        raise
+    except urllib.error.URLError as err:
+        reason = getattr(err, "reason", None)
+        if _is_ssl_verification_error(err) or (reason and _is_ssl_verification_error(reason)):
+            logger.warning(
+                "SSL certificate verification failed (self-signed proxy/antivirus SSL inspection detected). "
+                "Retrying with unverified SSL context..."
+            )
+            return urllib.request.urlopen(
+                req,
+                timeout=timeout,
+                context=_get_ssl_context(allow_unverified=True),
+            )
+        raise
 
 # Global in-memory log of simulated Telegram dispatches (for defense demonstration)
 MOCK_TELEGRAM_HISTORY: List[Dict[str, Any]] = []
@@ -55,13 +121,60 @@ def get_telegram_bot_link(ticket_number: Optional[int] = None) -> str:
     return f"https://t.me/{username}"
 
 
-def generate_telegram_qr_pixmap(data_or_ticket: Any, size: int = 180):
+def render_qr_matrix_to_pixmap(
+    matrix: List[List[bool]],
+    size: int = 180,
+    fg_color: str = "#102a43",
+    bg_color: str = "#ffffff",
+):
     """
-    Generate a high-resolution QR code QPixmap encoding the Telegram bot deep-link.
+    Render a 2D boolean matrix directly onto a QPixmap using QPainter.
+    Zero-dependency: does NOT require Pillow/PIL or external image processing engines.
     """
     try:
         from PySide6.QtCore import Qt
-        from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter, QPixmap
+        from PySide6.QtGui import QColor, QPainter, QPixmap
+    except ImportError:
+        return None
+
+    rows = len(matrix)
+    cols = len(matrix[0]) if rows else 0
+    if not rows or not cols:
+        return None
+
+    pixmap = QPixmap(size, size)
+    pixmap.fill(QColor(bg_color))
+
+    painter = QPainter(pixmap)
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(QColor(fg_color))
+
+    cell_w = size / cols
+    cell_h = size / rows
+
+    for r in range(rows):
+        for c in range(cols):
+            if matrix[r][c]:
+                painter.drawRect(
+                    int(c * cell_w),
+                    int(r * cell_h),
+                    int(cell_w + 1),
+                    int(cell_h + 1),
+                )
+
+    painter.end()
+    return pixmap
+
+
+def generate_telegram_qr_pixmap(data_or_ticket: Any, size: int = 180):
+    """
+    Generate a high-resolution QR code QPixmap encoding the Telegram bot deep-link.
+    Prioritizes environment qrcode library or built-in vendored qrcode engine,
+    rendering directly via Qt QPainter without needing Pillow.
+    """
+    try:
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPixmap
     except ImportError:
         return None
 
@@ -74,7 +187,11 @@ def generate_telegram_qr_pixmap(data_or_ticket: Any, size: int = 180):
         data = str(data_or_ticket)
 
     try:
-        import qrcode
+        try:
+            import qrcode
+        except ImportError:
+            from tapnque.vendor import qrcode
+
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_M,
@@ -83,17 +200,14 @@ def generate_telegram_qr_pixmap(data_or_ticket: Any, size: int = 180):
         )
         qr.add_data(data)
         qr.make(fit=True)
-        img = qr.make_image(fill_color="#102a43", back_color="#ffffff")
-
-        buf = BytesIO()
-        img.save(buf, format="PNG")
-        pixmap = QPixmap()
-        pixmap.loadFromData(buf.getvalue())
-        return pixmap.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        matrix = qr.get_matrix()
+        pixmap = render_qr_matrix_to_pixmap(matrix, size=size, fg_color="#102a43", bg_color="#ffffff")
+        if pixmap and not pixmap.isNull():
+            return pixmap
     except Exception as exc:
         logger.warning("Failed to generate QR with qrcode library: %s. Using stylized fallback.", exc)
 
-    # Fallback visual matrix representation if qrcode library is absent
+    # Fallback visual matrix representation if qrcode engine cannot be initialized
     pixmap = QPixmap(size, size)
     pixmap.fill(QColor("#ffffff"))
     painter = QPainter(pixmap)
@@ -177,7 +291,7 @@ def fetch_recent_telegram_users(bot_token: str, timeout: int = 5) -> List[Dict[s
                 "Accept": "application/json",
             },
         )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with robust_urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             if not data.get("ok"):
                 return users
@@ -272,7 +386,7 @@ def validate_telegram_bot_token(bot_token: str, timeout: int = 6) -> Tuple[bool,
                 "Accept": "application/json",
             },
         )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with robust_urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             if data.get("ok") and isinstance(data.get("result"), dict):
                 username = (data["result"].get("username") or "").strip().lstrip("@")
@@ -355,7 +469,7 @@ def send_via_telegram_api(
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
+        with robust_urlopen(req, timeout=timeout) as response:
             body = response.read().decode("utf-8")
             logger.info("Telegram Bot API response: %s", body)
             return True, "sent", body
@@ -603,7 +717,7 @@ class _TelegramLinkListener:
                 "Accept": "application/json",
             },
         )
-        with urllib.request.urlopen(req, timeout=self.LONG_POLL_TIMEOUT + 10) as resp:
+        with robust_urlopen(req, timeout=self.LONG_POLL_TIMEOUT + 10) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             if not data.get("ok"):
                 return []
