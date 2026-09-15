@@ -298,6 +298,66 @@ class TestTelegramDeepLinkAutomation(unittest.TestCase):
 
         self.assertEqual(mock_send.call_count, 1)
 
+    def test_robust_urlopen_ssl_retry(self):
+        """Verify robust_urlopen retries with unverified context upon SSL verification error."""
+        import ssl
+        import urllib.error
+        from tapnque.services.telegram_service import robust_urlopen
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{"ok": true}'
+        mock_response.__enter__.return_value = mock_response
+
+        ssl_err = urllib.error.URLError(
+            ssl.SSLCertVerificationError(
+                "certificate verify failed: self-signed certificate in certificate chain"
+            )
+        )
+
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            mock_urlopen.side_effect = [ssl_err, mock_response]
+            req = urllib.request.Request("https://api.telegram.org/bot123/getMe")
+            resp = robust_urlopen(req)
+
+            self.assertEqual(mock_urlopen.call_count, 2)
+            # First call attempted verified context
+            call1_ctx = mock_urlopen.call_args_list[0][1]["context"]
+            self.assertTrue(call1_ctx.check_hostname)
+            # Second call used unverified context
+            call2_ctx = mock_urlopen.call_args_list[1][1]["context"]
+            self.assertFalse(call2_ctx.check_hostname)
+            self.assertEqual(call2_ctx.verify_mode, ssl.CERT_NONE)
+
+    def test_render_qr_matrix_to_pixmap(self):
+        """Verify render_qr_matrix_to_pixmap produces a valid QPixmap from a boolean matrix."""
+        try:
+            from PySide6.QtGui import QGuiApplication
+        except ImportError:
+            self.skipTest("PySide6 not installed in current environment")
+
+        from tapnque.services.telegram_service import (
+            generate_telegram_qr_pixmap,
+            render_qr_matrix_to_pixmap,
+        )
+
+        _app = QGuiApplication.instance() or QGuiApplication(["test", "-platform", "offscreen"])
+        matrix = [
+            [True, False, True],
+            [False, True, False],
+            [True, True, True],
+        ]
+        pixmap = render_qr_matrix_to_pixmap(matrix, size=150)
+        self.assertIsNotNone(pixmap)
+        self.assertFalse(pixmap.isNull())
+        self.assertEqual(pixmap.width(), 150)
+        self.assertEqual(pixmap.height(), 150)
+
+        # Test full deep link QR generation
+        qr_pix = generate_telegram_qr_pixmap("https://t.me/OlfuTapNQue_bot", 200)
+        self.assertIsNotNone(qr_pix)
+        self.assertFalse(qr_pix.isNull())
+        self.assertEqual(qr_pix.width(), 200)
+
 
 if __name__ == "__main__":
     unittest.main()

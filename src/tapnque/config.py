@@ -4,11 +4,17 @@ Centralizes paths, settings, and environment variables.
 """
 
 import os
+import sys
 from pathlib import Path
 
 # Base Paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 PACKAGE_DIR = Path(__file__).resolve().parent
+VENDOR_DIR = PACKAGE_DIR / "vendor"
+
+# Ensure vendored dependencies (e.g. pure-python qrcode engine) are available system-wide
+if VENDOR_DIR.exists() and str(VENDOR_DIR) not in sys.path:
+    sys.path.insert(0, str(VENDOR_DIR))
 
 
 def _load_env_file():
@@ -68,6 +74,9 @@ TELEGRAM_BOT_USERNAME = os.getenv(
 ).strip().lstrip("@")
 DEFAULT_TELEGRAM_ENABLED = os.getenv("TAPNQUE_TELEGRAM_ENABLED", "1").strip().lower() in ("1", "true", "yes")
 DEFAULT_TELEGRAM_MOCK_MODE = os.getenv("TAPNQUE_TELEGRAM_MOCK_MODE", "0").strip().lower() in ("1", "true", "yes")
+
+# Network & Security Settings (SSL verification behavior for proxies/antivirus)
+SSL_VERIFY_ENABLED = os.getenv("TAPNQUE_SSL_VERIFY", "1").strip().lower() not in ("0", "false", "no")
 
 # Modern High-Impact Telegram Notification Templates
 DEFAULT_TELEGRAM_TEMPLATE_CREATED = (
