@@ -10,6 +10,27 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 PACKAGE_DIR = Path(__file__).resolve().parent
 
+
+def _load_env_file():
+    """Load key-value pairs from .env into os.environ if present and not already set."""
+    env_file = PROJECT_ROOT / ".env"
+    if env_file.exists():
+        try:
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k and k not in os.environ:
+                            os.environ[k] = v
+        except Exception:
+            pass
+
+
+_load_env_file()
+
 # Directory locations with environment override support
 DATA_DIR = Path(os.getenv("TAPNQUE_DATA_DIR", PROJECT_ROOT / "data")).resolve()
 ASSETS_DIR = Path(os.getenv("TAPNQUE_ASSETS_DIR", PROJECT_ROOT / "assets")).resolve()
@@ -39,10 +60,14 @@ DEFAULT_SMS_API_KEY = os.getenv("TAPNQUE_SMS_API_KEY", "").strip()
 DEFAULT_SMS_SENDER_NAME = os.getenv("TAPNQUE_SMS_SENDER_NAME", "TapNQue").strip()
 
 # Telegram Bot & QR Code Notification Settings
-TELEGRAM_BOT_TOKEN = os.getenv("TAPNQUE_TELEGRAM_BOT_TOKEN", "").strip()
-TELEGRAM_BOT_USERNAME = os.getenv("TAPNQUE_TELEGRAM_BOT_USERNAME", "").strip().lstrip("@")
+TELEGRAM_BOT_TOKEN = os.getenv(
+    "TAPNQUE_TELEGRAM_BOT_TOKEN", "8699737243:AAEJMe5IUcf4Wj89iI2or-pcvxpxyxOG5x0"
+).strip()
+TELEGRAM_BOT_USERNAME = os.getenv(
+    "TAPNQUE_TELEGRAM_BOT_USERNAME", "OlfuTapNQue_bot"
+).strip().lstrip("@")
 DEFAULT_TELEGRAM_ENABLED = os.getenv("TAPNQUE_TELEGRAM_ENABLED", "1").strip().lower() in ("1", "true", "yes")
-DEFAULT_TELEGRAM_MOCK_MODE = os.getenv("TAPNQUE_TELEGRAM_MOCK_MODE", "1").strip().lower() in ("1", "true", "yes")
+DEFAULT_TELEGRAM_MOCK_MODE = os.getenv("TAPNQUE_TELEGRAM_MOCK_MODE", "0").strip().lower() in ("1", "true", "yes")
 
 # Modern High-Impact Telegram Notification Templates
 DEFAULT_TELEGRAM_TEMPLATE_CREATED = (
