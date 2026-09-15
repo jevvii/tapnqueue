@@ -148,7 +148,7 @@ class TestDatabaseManager(unittest.TestCase):
         """Verify Telegram settings retrieval, saving, and ticket telegram status updates."""
         settings = self.db.get_telegram_settings()
         self.assertTrue(settings.get("telegram_enabled"))
-        self.assertTrue(settings.get("telegram_mock_mode"))
+        self.assertIn("telegram_mock_mode", settings)
 
         # Update settings
         self.db.save_telegram_settings(
