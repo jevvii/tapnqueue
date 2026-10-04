@@ -33,7 +33,37 @@ def _send_email_sync(to_email: str, subject: str, body: str) -> bool:
         msg.attach(MIMEText(body, "plain"))
 
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=8)
-        server.starttls()
+        try:
+            import ssl
+            from tapnque.config import SSL_VERIFY_ENABLED
+
+            if not SSL_VERIFY_ENABLED:
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                server.starttls(context=ctx)
+            else:
+                try:
+                    server.starttls()
+                except Exception as tls_err:
+                    if "certificate verify failed" in str(tls_err).lower() or isinstance(
+                        tls_err, (ssl.SSLCertVerificationError, ssl.SSLError)
+                    ):
+                        logger.warning(
+                            "SMTP STARTTLS certificate verification failed (%s). Retrying with unverified SSL context...",
+                            tls_err,
+                        )
+                        server.close()
+                        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=8)
+                        ctx = ssl.create_default_context()
+                        ctx.check_hostname = False
+                        ctx.verify_mode = ssl.CERT_NONE
+                        server.starttls(context=ctx)
+                    else:
+                        raise
+        except Exception as exc:
+            logger.warning("SMTP STARTTLS negotiation error: %s", exc)
+
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
         server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
         server.quit()
